@@ -35,6 +35,7 @@ import type {
 } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 import { placeholderImages } from '@/lib/placeholder-images.json';
 import Link from 'next/link';
 import { NumberPickerDialog } from './NumberPickerDialog';
@@ -568,6 +569,14 @@ export default function WorkoutDayView({ day }: { day: string }) {
     );
   }
 
+  const stickyTimerLabel = (() => {
+    if (!activeTimerKey) return null;
+    const lastDash = activeTimerKey.lastIndexOf('-');
+    const exName = activeTimerKey.substring(0, lastDash);
+    const setNum = parseInt(activeTimerKey.substring(lastDash + 1)) + 1;
+    return `${exName} · Set ${setNum}`;
+  })();
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
@@ -741,60 +750,32 @@ export default function WorkoutDayView({ day }: { day: string }) {
                     />
 
                     <div className="hidden sm:flex justify-center items-center">
-                      {set.completed &&
-                        activeTimerKey !== `${ex.name}-${setIndex}` &&
-                        !isTimerRunning && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => startTimer(ex.name, setIndex)}
-                          >
-                            <Play className="mr-2 h-4 w-4" />
-                            Start Rest
-                          </Button>
-                        )}
-                      {isTimerRunning &&
-                        activeTimerKey === `${ex.name}-${setIndex}` && (
-                          <Button
-                            variant="outline"
-                            size="lg"
-                            className="font-mono text-lg w-full"
-                            onClick={stopTimer}
-                          >
-                            <Timer className="mr-2 h-4 w-4" />
-                            {formatTime(timerSeconds)}
-                          </Button>
-                        )}
+                      {set.completed && !isTimerRunning && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => startTimer(ex.name, setIndex)}
+                        >
+                          <Play className="mr-2 h-4 w-4" />
+                          Start Rest
+                        </Button>
+                      )}
                     </div>
                   </div>
 
                   {/* Timer row — mobile only */}
                   <div className="sm:hidden">
-                    {set.completed &&
-                      activeTimerKey !== `${ex.name}-${setIndex}` &&
-                      !isTimerRunning && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => startTimer(ex.name, setIndex)}
-                        >
-                          <Play className="mr-2 h-4 w-4" />
-                          Rest ({restTimers[ex.name] || 60}s)
-                        </Button>
-                      )}
-                    {isTimerRunning &&
-                      activeTimerKey === `${ex.name}-${setIndex}` && (
-                        <Button
-                          variant="outline"
-                          size="lg"
-                          className="font-mono text-lg w-full"
-                          onClick={stopTimer}
-                        >
-                          <Timer className="mr-2 h-4 w-4" />
-                          {formatTime(timerSeconds)}
-                        </Button>
-                      )}
+                    {set.completed && !isTimerRunning && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => startTimer(ex.name, setIndex)}
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Rest ({restTimers[ex.name] || 60}s)
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -866,6 +847,19 @@ export default function WorkoutDayView({ day }: { day: string }) {
           Finish & Log Workout
         </Button>
       </div>
+
+      {/* Fullscreen rest timer overlay — rendered in document.body via portal to escape sidebar transforms */}
+      {isTimerRunning && createPortal(
+        <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6 p-8">
+          <p className="text-muted-foreground text-sm uppercase tracking-widest">Resting after</p>
+          <p className="text-xl font-semibold text-center">{stickyTimerLabel}</p>
+          <span className="font-mono text-8xl font-bold text-primary tabular-nums">{formatTime(timerSeconds)}</span>
+          <Button variant="outline" size="lg" className="mt-4 text-lg px-10" onClick={stopTimer}>
+            Skip Rest
+          </Button>
+        </div>,
+        document.body
+      )}
 
       <Dialog open={isExplanationOpen} onOpenChange={setIsExplanationOpen}>
         <DialogContent className="sm:max-w-md">
