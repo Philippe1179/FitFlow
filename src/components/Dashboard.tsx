@@ -12,8 +12,8 @@ import {
 import { Button } from './ui/button';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, Moon, Repeat, Zap } from 'lucide-react';
-import { getTodayDayName } from '@/lib/utils';
-import { differenceInCalendarDays, parseISO, subDays } from 'date-fns';
+import { getTodayDayName, calculateStreak } from '@/lib/utils';
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images.json';
 
@@ -27,55 +27,7 @@ export default function Dashboard() {
   const isRestDay = !planForToday || planForToday.exercises.length === 0;
 
   const totalWorkouts = completedWorkouts.length;
-  let streak = 0;
-  if (totalWorkouts > 0 && activePlan) {
-    const sorted = [...completedWorkouts].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-
-    const todayDate = new Date();
-    const lastWorkoutDate = parseISO(sorted[0].date);
-    let daysSinceLast = differenceInCalendarDays(todayDate, lastWorkoutDate);
-    
-    let restDaysSinceLast = 0;
-    for (let i = 1; i < daysSinceLast; i++) {
-        const dateToCheck = subDays(todayDate, i);
-        const dayName = dateToCheck.toLocaleDateString('en-US', { weekday: 'long' });
-        const planForDay = activePlan.weeklyWorkoutPlan.find(p => p.day.toLowerCase() === dayName.toLowerCase());
-        if (!planForDay || planForDay.exercises.length === 0) {
-            restDaysSinceLast++;
-        }
-    }
-
-    if (daysSinceLast - restDaysSinceLast > 1) {
-        streak = 0;
-    } else {
-        streak = 1;
-        for (let i = 0; i < sorted.length - 1; i++) {
-            const currentWorkoutDate = parseISO(sorted[i].date);
-            const prevWorkoutDate = parseISO(sorted[i+1].date);
-            const dayDiff = differenceInCalendarDays(currentWorkoutDate, prevWorkoutDate);
-
-            if (dayDiff <= 0) continue;
-
-            let restDaysBetween = 0;
-            for (let j = 1; j < dayDiff; j++) {
-                const dateToCheck = subDays(currentWorkoutDate, j);
-                const dayName = dateToCheck.toLocaleDateString('en-US', { weekday: 'long' });
-                const planForDay = activePlan.weeklyWorkoutPlan.find(p => p.day.toLowerCase() === dayName.toLowerCase());
-                if (!planForDay || planForDay.exercises.length === 0) {
-                    restDaysBetween++;
-                }
-            }
-            
-            if (dayDiff - restDaysBetween === 1) {
-                streak++;
-            } else {
-                break;
-            }
-        }
-    }
-  }
+  const streak = activePlan ? calculateStreak(completedWorkouts, activePlan) : 0;
 
   const isTodayCompleted = completedWorkouts.some(
     (w) =>
