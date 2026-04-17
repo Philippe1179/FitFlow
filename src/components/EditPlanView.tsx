@@ -8,7 +8,7 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { AddExerciseDialog } from './AddExerciseDialog';
-import { ArrowUp, ArrowDown, Trash2, Plus, Save, ArrowLeft } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus, Save, ArrowLeft, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -22,6 +22,9 @@ export default function EditPlanView({ planId }: { planId: string }) {
     
     const [isAddExerciseDialogOpen, setIsAddExerciseDialogOpen] = useState(false);
     const [dayToAddExercise, setDayToAddExercise] = useState<string | null>(null);
+
+    const [isEditExerciseDialogOpen, setIsEditExerciseDialogOpen] = useState(false);
+    const [exerciseToEdit, setExerciseToEdit] = useState<{ day: string; index: number; exercise: Exercise } | null>(null);
 
     useEffect(() => {
         const planToEdit = allPlans.find(p => p.id === planId);
@@ -59,6 +62,18 @@ export default function EditPlanView({ planId }: { planId: string }) {
 
         [newExercises[index], newExercises[newIndex]] = [newExercises[newIndex], newExercises[index]];
         handleExerciseListChange(day, newExercises);
+    };
+
+    const handleSaveEditedExercise = (updatedExercise: Exercise) => {
+        if (!exerciseToEdit || !plan) return;
+        const dayPlan = plan.weeklyWorkoutPlan.find(d => d.day === exerciseToEdit.day);
+        if (!dayPlan) return;
+        const newExercises = dayPlan.exercises.map((ex, i) =>
+            i === exerciseToEdit.index ? updatedExercise : ex
+        );
+        handleExerciseListChange(exerciseToEdit.day, newExercises);
+        setIsEditExerciseDialogOpen(false);
+        setExerciseToEdit(null);
     };
 
     const handleAddExercise = (day: string, newExercise: Exercise) => {
@@ -123,6 +138,13 @@ export default function EditPlanView({ planId }: { planId: string }) {
                                 <ArrowDown className="h-5 w-5" />
                                 <span className="sr-only">Move down</span>
                             </Button>
+                            <Button variant="ghost" size="icon" onClick={() => {
+                                setExerciseToEdit({ day: dayPlan.day, index, exercise: ex });
+                                setIsEditExerciseDialogOpen(true);
+                            }}>
+                                <Pencil className="h-5 w-5" />
+                                <span className="sr-only">Edit</span>
+                            </Button>
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeleteExercise(dayPlan.day, index)}>
                                 <Trash2 className="h-5 w-5" />
                                 <span className="sr-only">Delete</span>
@@ -151,6 +173,13 @@ export default function EditPlanView({ planId }: { planId: string }) {
                         handleAddExercise(dayToAddExercise, newExercise)
                     }
                 }}
+            />
+
+            <AddExerciseDialog
+                open={isEditExerciseDialogOpen}
+                onOpenChange={setIsEditExerciseDialogOpen}
+                onAddExercise={handleSaveEditedExercise}
+                initialExercise={exerciseToEdit?.exercise}
             />
         </div>
     );

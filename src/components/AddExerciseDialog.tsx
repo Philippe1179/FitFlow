@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Exercise } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,14 +17,30 @@ interface AddExerciseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddExercise: (exercise: Exercise) => void;
+  initialExercise?: Exercise;
 }
 
-export function AddExerciseDialog({ open, onOpenChange, onAddExercise }: AddExerciseDialogProps) {
+export function AddExerciseDialog({ open, onOpenChange, onAddExercise, initialExercise }: AddExerciseDialogProps) {
+  const isEditMode = !!initialExercise;
   const [name, setName] = useState('');
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [weightOrOption, setWeightOrOption] = useState('');
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open && initialExercise) {
+      setName(initialExercise.name);
+      setSets(String(initialExercise.sets));
+      setReps(initialExercise.reps);
+      setWeightOrOption(initialExercise.weightOrOption);
+    } else if (open && !initialExercise) {
+      setName('');
+      setSets('');
+      setReps('');
+      setWeightOrOption('');
+    }
+  }, [open, initialExercise]);
 
   const handleSave = () => {
     const setsNum = parseInt(sets, 10);
@@ -56,7 +72,7 @@ export function AddExerciseDialog({ open, onOpenChange, onAddExercise }: AddExer
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add New Exercise</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Edit Exercise' : 'Add New Exercise'}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
@@ -86,7 +102,7 @@ export function AddExerciseDialog({ open, onOpenChange, onAddExercise }: AddExer
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave}>Add Exercise</Button>
+          <Button onClick={handleSave}>{isEditMode ? 'Save Changes' : 'Add Exercise'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
