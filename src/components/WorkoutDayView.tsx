@@ -581,7 +581,7 @@ export default function WorkoutDayView({ day }: { day: string }) {
             Workout: <span className="text-primary">{dayPlan.day}</span>
           </h1>
         </div>
-        <Button onClick={handleFinishWorkout}>
+        <Button onClick={handleFinishWorkout} className="hidden sm:flex">
           <Check className="mr-2 h-4 w-4" />
           Finish & Log Workout
         </Button>
@@ -664,100 +664,123 @@ export default function WorkoutDayView({ day }: { day: string }) {
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
-              <div className="grid grid-cols-[auto,1fr,1fr,auto] items-center gap-2 sm:gap-4 text-sm text-center font-semibold text-muted-foreground">
+              <div className="grid grid-cols-[auto,1fr,1fr] sm:grid-cols-[auto,1fr,1fr,auto] items-center gap-2 sm:gap-4 text-sm text-center font-semibold text-muted-foreground">
                 <div />
                 <div>Reps</div>
                 <div>Weight ({userProfile?.displayWeightUnit || 'kg'})</div>
-                <div />
+                <div className="hidden sm:block" />
               </div>
               {exerciseState[ex.name]?.sets.map((set, setIndex) => (
-                <div
-                  key={setIndex}
-                  className="grid grid-cols-[auto,1fr,1fr,auto] items-center gap-2 sm:gap-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id={`${ex.name}-set-${setIndex}`}
-                      checked={set.completed}
-                      onCheckedChange={(checked) =>
-                        handleSetChange(
-                          ex.name,
-                          setIndex,
-                          'completed',
-                          !!checked
-                        )
-                      }
-                      className="h-5 w-5"
-                    />
-                    <label
-                      htmlFor={`${ex.name}-set-${setIndex}`}
-                      className="font-semibold text-sm"
-                    >
-                      Set {setIndex + 1}
-                    </label>
-                    {setIndex > 0 ? (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 shrink-0"
-                        onClick={() => handleCopyPreviousSet(ex.name, setIndex)}
-                        title="Copy from previous set"
+                <div key={setIndex} className="space-y-2">
+                  <div className="grid grid-cols-[auto,1fr,1fr] sm:grid-cols-[auto,1fr,1fr,auto] items-center gap-2 sm:gap-4">
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <Checkbox
+                        id={`${ex.name}-set-${setIndex}`}
+                        checked={set.completed}
+                        onCheckedChange={(checked) =>
+                          handleSetChange(ex.name, setIndex, 'completed', !!checked)
+                        }
+                        className="h-5 w-5"
+                      />
+                      <label
+                        htmlFor={`${ex.name}-set-${setIndex}`}
+                        className="font-semibold text-sm"
                       >
-                        <Copy className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    ) : (
-                      <div className="h-6 w-6 shrink-0" />
-                    )}
+                        <span className="sm:hidden">{setIndex + 1}</span>
+                        <span className="hidden sm:inline">Set {setIndex + 1}</span>
+                      </label>
+                      {setIndex > 0 ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => handleCopyPreviousSet(ex.name, setIndex)}
+                          title="Copy from previous set"
+                        >
+                          <Copy className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      ) : (
+                        <div className="h-6 w-6 shrink-0" />
+                      )}
+                    </div>
+
+                    <NumberPickerDialog
+                      title={`Set ${setIndex + 1} Reps`}
+                      initialValue={set.reps}
+                      onSave={(value) =>
+                        handleSetChange(ex.name, setIndex, 'reps', value)
+                      }
+                      incrementSteps={[1, 5, 10]}
+                      trigger={
+                        <Button variant="outline" className="h-10 text-base">
+                          {set.reps || (
+                            <span className="text-muted-foreground">
+                              {typeof ex.reps === 'string' ? ex.reps : 'Reps'}
+                            </span>
+                          )}
+                        </Button>
+                      }
+                    />
+
+                    <NumberPickerDialog
+                      title={`Set ${setIndex + 1} Weight (${userProfile?.displayWeightUnit || 'kg'})`}
+                      initialValue={set.weight}
+                      onSave={(value) =>
+                        handleSetChange(ex.name, setIndex, 'weight', value)
+                      }
+                      incrementSteps={[2.5, 5, 10]}
+                      trigger={
+                        <Button variant="outline" className="h-10 text-base">
+                          {set.weight ? (
+                            `${set.weight}`
+                          ) : (
+                            <span className="text-muted-foreground">Weight</span>
+                          )}
+                        </Button>
+                      }
+                    />
+
+                    <div className="hidden sm:flex justify-center items-center">
+                      {set.completed &&
+                        activeTimerKey !== `${ex.name}-${setIndex}` &&
+                        !isTimerRunning && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => startTimer(ex.name, setIndex)}
+                          >
+                            <Play className="mr-2 h-4 w-4" />
+                            Start Rest
+                          </Button>
+                        )}
+                      {isTimerRunning &&
+                        activeTimerKey === `${ex.name}-${setIndex}` && (
+                          <Button
+                            variant="outline"
+                            size="lg"
+                            className="font-mono text-lg w-full"
+                            onClick={stopTimer}
+                          >
+                            <Timer className="mr-2 h-4 w-4" />
+                            {formatTime(timerSeconds)}
+                          </Button>
+                        )}
+                    </div>
                   </div>
 
-                  <NumberPickerDialog
-                    title={`Set ${setIndex + 1} Reps`}
-                    initialValue={set.reps}
-                    onSave={(value) =>
-                      handleSetChange(ex.name, setIndex, 'reps', value)
-                    }
-                    incrementSteps={[1, 5, 10]}
-                    trigger={
-                      <Button variant="outline" className="h-10 text-base">
-                        {set.reps || (
-                          <span className="text-muted-foreground">
-                            {typeof ex.reps === 'string' ? ex.reps : 'Reps'}
-                          </span>
-                        )}
-                      </Button>
-                    }
-                  />
-
-                  <NumberPickerDialog
-                    title={`Set ${
-                      setIndex + 1
-                    } Weight (${userProfile?.displayWeightUnit || 'kg'})`}
-                    initialValue={set.weight}
-                    onSave={(value) =>
-                      handleSetChange(ex.name, setIndex, 'weight', value)
-                    }
-                    incrementSteps={[2.5, 5, 10]}
-                    trigger={
-                      <Button variant="outline" className="h-10 text-base">
-                        {set.weight ? (
-                          `${set.weight}`
-                        ) : (
-                          <span className="text-muted-foreground">Weight</span>
-                        )}
-                      </Button>
-                    }
-                  />
-                  <div className="flex justify-center items-center">
+                  {/* Timer row — mobile only */}
+                  <div className="sm:hidden">
                     {set.completed &&
                       activeTimerKey !== `${ex.name}-${setIndex}` &&
                       !isTimerRunning && (
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="w-full"
                           onClick={() => startTimer(ex.name, setIndex)}
                         >
                           <Play className="mr-2 h-4 w-4" />
-                          Start Rest
+                          Rest ({restTimers[ex.name] || 60}s)
                         </Button>
                       )}
                     {isTimerRunning &&
