@@ -1,0 +1,927 @@
+'use client';
+
+import { AppContext } from '@/contexts/AppContext';
+import { useContext, useEffect, useState, useTransition } from 'react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from './ui/card';
+import {
+  Bike,
+  Check,
+  Flame,
+  Dumbbell,
+  Wind,
+  NotebookText,
+  Star,
+  ArrowLeft,
+  Play,
+  Timer,
+  Info,
+  Replace,
+  Copy,
+} from 'lucide-react';
+import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
+import { Textarea } from './ui/textarea';
+import type {
+  CompletedWorkout,
+  Exercise,
+  ExerciseLog,
+  WorkoutDayPlan,
+} from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import Image from 'next/image';
+import { placeholderImages } from '@/lib/placeholder-images.json';
+import Link from 'next/link';
+import { NumberPickerDialog } from './NumberPickerDialog';
+import { useRouter } from 'next/navigation';
+import {
+  getExerciseExplanationAction,
+  suggestAlternativeExerciseAction,
+} from '@/app/actions';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from './ui/dialog';
+import { Skeleton } from './ui/skeleton';
+
+type ExerciseState = {
+  [key: string]: {
+    sets: { reps: string | number; weight: string | number; completed: boolean }[];
+    notes: string;
+  };
+};
+
+export default function WorkoutDayView({ day }: { day: string }) {
+  const { activePlan, addCompletedWorkout, userProfile, savePlan } =
+    useContext(AppContext);
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const dayPlan = activePlan?.weeklyWorkoutPlan.find(
+    (d) => d.day.toLowerCase() === day.toLowerCase()
+  );
+
+  const [exerciseState, setExerciseState] = useState<ExerciseState>({});
+  const [restTimers, setRestTimers] = useState<{ [key: string]: number }>({});
+
+  // Timer state
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [activeTimerKey, setActiveTimerKey] = useState<string | null>(null);
+
+  // Sound effect state
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+
+  // Explanation Dialog state
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<string | null>(
+    null
+  );
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [isExplanationLoading, startExplanationTransition] = useTransition();
+
+  // Suggestion Dialog state
+  const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
+  const [exerciseToSwap, setExerciseToSwap] = useState<Exercise | null>(null);
+  const [suggestion, setSuggestion] = useState<{
+    alternativeExerciseName: string;
+    reasoning: string;
+  } | null>(null);
+  const [isSuggestionLoading, startSuggestionTransition] = useTransition();
+
+  useEffect(() => {
+    setAudioContext(
+      new (window.AudioContext || (window as any).webkitAudioContext)()
+    );
+  }, []);
+
+  useEffect(() => {
+    if (dayPlan) {
+      const initializeExerciseState = () => {
+        const initialState: ExerciseState = {};
+        dayPlan?.exercises.forEach((ex) => {
+          initialState[ex.name] = {
+            sets: Array.from({ length: ex.sets }, () => ({
+              reps: '',
+              weight: '',
+              completed: false,
+            })),
+            notes: '',
+          };
+        });
+        setExerciseState(initialState);
+      };
+
+      try {
+        const savedStateJSON = localStorage.getItem(
+          `workout-progress-${activePlan?.id}-${dayPlan.day}`
+        );
+        if (savedStateJSON) {
+          const savedState = JSON.parse(savedStateJSON);
+          const planExerciseNames = dayPlan.exercises.map((e) => e.name);
+          const savedExerciseNames = Object.keys(savedState);
+          if (
+            planExerciseNames.length === savedExerciseNames.length &&
+            planExerciseNames.every((name) => savedExerciseNames.includes(name))
+          ) {
+            setExerciseState(savedState);
+          } else {
+            initializeExerciseState();
+          }
+        } else {
+          initializeExerciseState();
+        }
+      } catch (e) {
+        console.error(
+          'Failed to load or parse saved workout state from localStorage.',
+          e
+        );
+        localStorage.removeItem(`workout-progress-${activePlan?.id}-${dayPlan.day}`);
+        initializeExerciseState();
+      }
+
+      const initialRestTimers: { [key: string]: number } = {};
+      dayPlan.exercises.forEach((ex) => {
+        initialRestTimers[ex.name] = 60; // Default 60 seconds
+      });
+      try {
+        const savedTimersJSON = localStorage.getItem(
+          `workout-rest-timers-${activePlan?.id}-${dayPlan.day}`
+        );
+        if (savedTimersJSON) {
+          const savedTimers = JSON.parse(savedTimersJSON);
+          setRestTimers({ ...initialRestTimers, ...savedTimers });
+        } else {
+          setRestTimers(initialRestTimers);
+        }
+      } catch (e) {
+        console.error(
+          'Failed to load or parse rest timers from localStorage.',
+          e
+        );
+        setRestTimers(initialRestTimers);
+      }
+    }
+  }, [dayPlan, activePlan?.id]);
+
+  useEffect(() => {
+    if (dayPlan && Object.keys(exerciseState).length > 0) {
+      localStorage.setItem(
+        `workout-progress-${activePlan?.id}-${dayPlan.day}`,
+        JSON.stringify(exerciseState)
+      );
+    }
+  }, [exerciseState, dayPlan, activePlan?.id]);
+
+  useEffect(() => {
+    if (dayPlan && Object.keys(restTimers).length > 0) {
+      localStorage.setItem(
+        `workout-rest-timers-${activePlan?.id}-${dayPlan.day}`,
+        JSON.stringify(restTimers)
+      );
+    }
+  }, [restTimers, dayPlan, activePlan?.id]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setTimerSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval!);
+            setIsTimerRunning(false); 
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isTimerRunning]);
+
+  useEffect(() => {
+    const playSound = (freq: number, duration: number) => {
+      if (!audioContext) return;
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      gainNode.gain.value = 0.1;
+      oscillator.frequency.value = freq;
+      oscillator.type = 'sine';
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + duration);
+    };
+
+    if (isTimerRunning) {
+      if (timerSeconds <= 5 && timerSeconds > 1) {
+        playSound(440, 0.15); 
+      } else if (timerSeconds === 1) {
+        playSound(659, 0.2); 
+      }
+    } else {
+      if (timerSeconds === 0 && activeTimerKey) {
+        playSound(880, 0.5); 
+        toast({
+          title: 'Rest Over!',
+          description: 'Time for your next set.',
+        });
+        setActiveTimerKey(null); 
+      }
+    }
+  }, [timerSeconds, isTimerRunning, audioContext, toast, activeTimerKey]);
+
+  const startTimer = (exName: string, setIndex: number) => {
+    const duration = restTimers[exName] || 60;
+    if (isTimerRunning) {
+      stopTimer();
+    }
+    setTimerSeconds(duration);
+    setIsTimerRunning(true);
+    setActiveTimerKey(`${exName}-${setIndex}`);
+  };
+
+  const stopTimer = () => {
+    setIsTimerRunning(false);
+    setActiveTimerKey(null);
+    setTimerSeconds(0);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const handleSetChange = (
+    exName: string,
+    setIndex: number,
+    field: 'reps' | 'weight' | 'completed',
+    value: string | boolean | number
+  ) => {
+    setExerciseState((prev) => ({
+      ...prev,
+      [exName]: {
+        ...prev[exName],
+        sets: prev[exName].sets.map((set, i) =>
+          i === setIndex ? { ...set, [field]: value } : set
+        ),
+      },
+    }));
+  };
+
+  const handleNotesChange = (exName: string, value: string) => {
+    setExerciseState((prev) => ({
+      ...prev,
+      [exName]: {
+        ...prev[exName],
+        notes: value,
+      },
+    }));
+  };
+
+  const handleCopyPreviousSet = (exName: string, setIndex: number) => {
+    const previousSet = exerciseState[exName]?.sets[setIndex - 1];
+    if (previousSet) {
+      setExerciseState((prev) => ({
+        ...prev,
+        [exName]: {
+          ...prev[exName],
+          sets: prev[exName].sets.map((set, i) =>
+            i === setIndex
+              ? { ...set, reps: previousSet.reps, weight: previousSet.weight }
+              : set
+          ),
+        },
+      }));
+    }
+  };
+
+  const handleFinishWorkout = () => {
+    if (!dayPlan || !userProfile || !activePlan) return;
+
+    const completedExercises: ExerciseLog[] = Object.entries(exerciseState)
+      .filter(([_, data]) => data.sets.some((s) => s.completed))
+      .map(([name, data]) => ({
+        exerciseName: name,
+        sets: data.sets.map((s) => {
+          const weightInput = String(s.weight).trim();
+          let finalWeight: number | string;
+
+          if (weightInput === '' || Number(weightInput) === 0) {
+            finalWeight = 0;
+          } else {
+            const weightAsNumber = Number(weightInput);
+            if (!isNaN(weightAsNumber)) {
+              if (userProfile.displayWeightUnit === 'lbs') {
+                finalWeight = weightAsNumber * 0.453592;
+              } else {
+                finalWeight = weightAsNumber;
+              }
+            } else {
+              finalWeight = weightInput;
+            }
+          }
+
+          return {
+            reps: s.reps,
+            weight: finalWeight,
+            completed: s.completed,
+          };
+        }),
+        notes: data.notes,
+      }));
+
+    if (completedExercises.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Empty Workout',
+        description: "You haven't completed any exercises.",
+      });
+      return;
+    }
+
+    const completedWorkout: CompletedWorkout = {
+      date: new Date().toISOString(),
+      day: dayPlan.day,
+      exercises: completedExercises,
+      weightUnitStored: 'kg',
+    };
+
+    addCompletedWorkout(completedWorkout);
+    toast({
+      title: 'Workout Complete!',
+      description: `Great job, ${userProfile?.name}! Your workout has been logged.`,
+    });
+
+    localStorage.removeItem(`workout-progress-${activePlan.id}-${dayPlan.day}`);
+    localStorage.removeItem(`workout-rest-timers-${activePlan.id}-${dayPlan.day}`);
+
+    router.push('/');
+  };
+
+  const handleGetExplanation = (exerciseName: string) => {
+    setSelectedExercise(exerciseName);
+    setIsExplanationOpen(true);
+    setExplanation(null);
+    startExplanationTransition(async () => {
+      const result = await getExerciseExplanationAction(exerciseName);
+      if (result.success && result.data) {
+        setExplanation(result.data);
+      } else {
+        setExplanation(
+          'Sorry, we could not fetch an explanation for this exercise at the moment. Please try again later.'
+        );
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: result.error,
+        });
+      }
+    });
+  };
+
+  const handleSwapExercise = (exercise: Exercise) => {
+    if (!userProfile || !dayPlan) return;
+    setExerciseToSwap(exercise);
+    setSuggestion(null);
+    setIsSwapDialogOpen(true);
+    startSuggestionTransition(async () => {
+      const result = await suggestAlternativeExerciseAction(
+        exercise.name,
+        userProfile,
+        dayPlan
+      );
+      if (result.success && result.data) {
+        setSuggestion(result.data);
+      } else {
+        setSuggestion({
+          alternativeExerciseName: 'Error',
+          reasoning: 'Could not fetch a suggestion. Please try again later.',
+        });
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: result.error,
+        });
+      }
+    });
+  };
+
+  const handleAcceptSwap = () => {
+    if (
+      !suggestion ||
+      !exerciseToSwap ||
+      !activePlan ||
+      !dayPlan ||
+      suggestion.alternativeExerciseName === 'Error'
+    )
+      return;
+
+    const newExercises = dayPlan.exercises.map((ex) =>
+      ex.name === exerciseToSwap.name
+        ? { ...ex, name: suggestion.alternativeExerciseName }
+        : ex
+    );
+
+    const newDayPlan: WorkoutDayPlan = { ...dayPlan, exercises: newExercises };
+
+    const newWeeklyPlan = activePlan.weeklyWorkoutPlan.map((dp) =>
+      dp.day.toLowerCase() === day.toLowerCase() ? newDayPlan : dp
+    );
+
+    const newWorkoutPlan = { ...activePlan, weeklyWorkoutPlan: newWeeklyPlan };
+
+    savePlan(newWorkoutPlan);
+
+    setExerciseState((prev) => {
+      const newState = { ...prev };
+      const exerciseData = newState[exerciseToSwap.name];
+      delete newState[exerciseToSwap.name];
+      newState[suggestion.alternativeExerciseName] = exerciseData;
+      return newState;
+    });
+
+    setRestTimers((prev) => {
+      const newTimers = { ...prev };
+      const timerData = newTimers[exerciseToSwap.name];
+      delete newTimers[exerciseToSwap.name];
+      newTimers[suggestion.alternativeExerciseName] = timerData || 60;
+      return newTimers;
+    });
+
+    toast({
+      title: 'Exercise Swapped!',
+      description: `"${exerciseToSwap.name}" was replaced with "${suggestion.alternativeExerciseName}".`,
+    });
+
+    setIsSwapDialogOpen(false);
+    setExerciseToSwap(null);
+    setSuggestion(null);
+  };
+
+  const isRestDay = !dayPlan || dayPlan.exercises.length === 0;
+
+  if (isRestDay) {
+    return (
+      <div className="p-4 md:p-6 space-y-6">
+        <div>
+          <Button asChild variant="ghost" className="mb-2">
+            <Link href="/plan">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Plan
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tighter">
+            Rest Day: <span className="text-primary">{dayPlan?.day || day}</span>
+          </h1>
+        </div>
+        <Card>
+          <CardHeader>
+            <Image
+              src={
+                placeholderImages[1]?.imageUrl ||
+                'https://picsum.photos/seed/restday/600/400'
+              }
+              alt={placeholderImages[1]?.description || 'Rest day'}
+              data-ai-hint={placeholderImages[1]?.imageHint || 'fitness rest'}
+              width={600}
+              height={400}
+              className="rounded-t-lg object-cover"
+            />
+          </CardHeader>
+          <CardContent className="pt-4 text-center">
+            <CardTitle className="text-2xl font-bold">
+              Active Recovery
+            </CardTitle>
+            <CardDescription className="mt-2">
+              Rest days are for recovery. Here are some suggestions to help your
+              body recuperate.
+            </CardDescription>
+          </CardContent>
+        </Card>
+
+        {dayPlan?.cardio && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg">
+                <Bike className="mr-2 text-primary" />
+                Light Cardio
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-muted-foreground whitespace-pre-wrap">
+                {dayPlan.cardio}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        {dayPlan?.coolDown && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg">
+                <Wind className="mr-2 text-primary" />
+                Stretching & Mobility
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-muted-foreground whitespace-pre-wrap">
+                {dayPlan.coolDown}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        {dayPlan?.notes && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg">
+                <Star className="mr-2 text-primary" />
+                Coach's Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-muted-foreground whitespace-pre-wrap">
+                {dayPlan.notes}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
+        <div>
+          <Button asChild variant="ghost" className="mb-2">
+            <Link href="/plan">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Plan
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tighter">
+            Workout: <span className="text-primary">{dayPlan.day}</span>
+          </h1>
+        </div>
+        <Button onClick={handleFinishWorkout}>
+          <Check className="mr-2 h-4 w-4" />
+          Finish & Log Workout
+        </Button>
+      </div>
+
+      {dayPlan.warmUp && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center text-lg">
+              <Flame className="mr-2 text-primary" />
+              Warm-Up
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-muted-foreground whitespace-pre-wrap">
+              {dayPlan.warmUp}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Dumbbell className="text-primary" />
+        <h2 className="text-2xl font-semibold tracking-tight">Main Workout</h2>
+      </div>
+
+      <div className="space-y-4">
+        {dayPlan.exercises.map((ex, exIndex) => (
+          <Card key={ex.name} className="overflow-hidden">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-xl">{ex.name}</CardTitle>
+                  <CardDescription>
+                    Target: {ex.sets} sets of {ex.reps} reps
+                    <br />
+                    Suggestion: {ex.weightOrOption}
+                  </CardDescription>
+                </div>
+                <div className="flex -my-2 -mr-2">
+                  <NumberPickerDialog
+                    title="Set Rest Time (seconds)"
+                    initialValue={restTimers[ex.name] || 60}
+                    onSave={(value) =>
+                      setRestTimers((prev) => ({ ...prev, [ex.name]: value }))
+                    }
+                    incrementSteps={[15, 30, 60]}
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={`Set Rest Time: ${restTimers[ex.name] || 60}s`}
+                      >
+                        <Timer className="h-5 w-5 text-muted-foreground" />
+                      </Button>
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleSwapExercise(ex)}
+                    disabled={isSuggestionLoading}
+                    title="Swap Exercise"
+                  >
+                    <Replace className="h-5 w-5 text-muted-foreground" />
+                    <span className="sr-only">Swap exercise for {ex.name}</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleGetExplanation(ex.name)}
+                    title="Get Explanation"
+                  >
+                    <Info className="h-5 w-5 text-muted-foreground" />
+                    <span className="sr-only">
+                      Get explanation for {ex.name}
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-0">
+              <div className="grid grid-cols-[auto,1fr,1fr,auto] items-center gap-2 sm:gap-4 text-sm text-center font-semibold text-muted-foreground">
+                <div />
+                <div>Reps</div>
+                <div>Weight ({userProfile?.displayWeightUnit || 'kg'})</div>
+                <div />
+              </div>
+              {exerciseState[ex.name]?.sets.map((set, setIndex) => (
+                <div
+                  key={setIndex}
+                  className="grid grid-cols-[auto,1fr,1fr,auto] items-center gap-2 sm:gap-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`${ex.name}-set-${setIndex}`}
+                      checked={set.completed}
+                      onCheckedChange={(checked) =>
+                        handleSetChange(
+                          ex.name,
+                          setIndex,
+                          'completed',
+                          !!checked
+                        )
+                      }
+                      className="h-5 w-5"
+                    />
+                    <label
+                      htmlFor={`${ex.name}-set-${setIndex}`}
+                      className="font-semibold text-sm"
+                    >
+                      Set {setIndex + 1}
+                    </label>
+                    {setIndex > 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={() => handleCopyPreviousSet(ex.name, setIndex)}
+                        title="Copy from previous set"
+                      >
+                        <Copy className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    ) : (
+                      <div className="h-6 w-6 shrink-0" />
+                    )}
+                  </div>
+
+                  <NumberPickerDialog
+                    title={`Set ${setIndex + 1} Reps`}
+                    initialValue={set.reps}
+                    onSave={(value) =>
+                      handleSetChange(ex.name, setIndex, 'reps', value)
+                    }
+                    incrementSteps={[1, 5, 10]}
+                    trigger={
+                      <Button variant="outline" className="h-10 text-base">
+                        {set.reps || (
+                          <span className="text-muted-foreground">
+                            {typeof ex.reps === 'string' ? ex.reps : 'Reps'}
+                          </span>
+                        )}
+                      </Button>
+                    }
+                  />
+
+                  <NumberPickerDialog
+                    title={`Set ${
+                      setIndex + 1
+                    } Weight (${userProfile?.displayWeightUnit || 'kg'})`}
+                    initialValue={set.weight}
+                    onSave={(value) =>
+                      handleSetChange(ex.name, setIndex, 'weight', value)
+                    }
+                    incrementSteps={[2.5, 5, 10]}
+                    trigger={
+                      <Button variant="outline" className="h-10 text-base">
+                        {set.weight ? (
+                          `${set.weight}`
+                        ) : (
+                          <span className="text-muted-foreground">Weight</span>
+                        )}
+                      </Button>
+                    }
+                  />
+                  <div className="flex justify-center items-center">
+                    {set.completed &&
+                      activeTimerKey !== `${ex.name}-${setIndex}` &&
+                      !isTimerRunning && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => startTimer(ex.name, setIndex)}
+                        >
+                          <Play className="mr-2 h-4 w-4" />
+                          Start Rest
+                        </Button>
+                      )}
+                    {isTimerRunning &&
+                      activeTimerKey === `${ex.name}-${setIndex}` && (
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          className="font-mono text-lg w-full"
+                          onClick={stopTimer}
+                        >
+                          <Timer className="mr-2 h-4 w-4" />
+                          {formatTime(timerSeconds)}
+                        </Button>
+                      )}
+                  </div>
+                </div>
+              ))}
+              <div className="relative mt-4">
+                <NotebookText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Textarea
+                  placeholder="How did it feel? Add notes here."
+                  value={exerciseState[ex.name]?.notes || ''}
+                  onChange={(e) => handleNotesChange(ex.name, e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {dayPlan.cardio && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center text-lg">
+              <Bike className="mr-2 text-primary" />
+              Light Cardio
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-muted-foreground whitespace-pre-wrap">
+              {dayPlan.cardio}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {dayPlan.coolDown && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center text-lg">
+              <Wind className="mr-2 text-primary" />
+              Cool-Down
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-muted-foreground whitespace-pre-wrap">
+              {dayPlan.coolDown}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {dayPlan.notes && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center text-lg">
+              <Star className="mr-2 text-primary" />
+              Coach's Notes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-muted-foreground whitespace-pre-wrap">
+              {dayPlan.notes}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="pt-4">
+        <Button onClick={handleFinishWorkout} className="w-full">
+          <Check className="mr-2 h-4 w-4" />
+          Finish & Log Workout
+        </Button>
+      </div>
+
+      <Dialog open={isExplanationOpen} onOpenChange={setIsExplanationOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{selectedExercise}</DialogTitle>
+            <DialogDescription>
+              A guide to proper form and execution.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
+            {isExplanationLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/6" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {explanation}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Swap Exercise: {exerciseToSwap?.name}</DialogTitle>
+            <DialogDescription>
+              Here's a suggested alternative based on your equipment and goals.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 max-h-[60vh] overflow-y-auto">
+            {isSuggestionLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-8 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+              </div>
+            ) : suggestion ? (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-primary">
+                  {suggestion.alternativeExerciseName}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {suggestion.reasoning}
+                </p>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={handleAcceptSwap}
+              disabled={
+                isSuggestionLoading ||
+                !suggestion ||
+                suggestion.alternativeExerciseName === 'Error'
+              }
+            >
+              Accept & Swap
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

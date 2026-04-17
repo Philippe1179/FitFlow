@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "tpasano211@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+
+      match /workoutPlans/{planId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      
+      match /completedWorkouts/{workoutId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      match /personalRecords/{recordId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+  }
+}
