@@ -12,6 +12,7 @@ import type {
   WorkoutPlan,
   CompletedWorkout,
   PersonalRecord,
+  BodyWeightEntry,
 } from '@/lib/types';
 import { useFirebase } from '@/firebase';
 import {
@@ -37,6 +38,12 @@ import {
   getPersonalRecords,
   clearPersonalRecords,
 } from '@/firebase/firestore/personal-records';
+import {
+  addBodyWeightEntry as fbAddBodyWeightEntry,
+  deleteBodyWeightEntry as fbDeleteBodyWeightEntry,
+  getBodyWeightEntries,
+  clearBodyWeightEntries,
+} from '@/firebase/firestore/body-weight';
 import { useToast } from '@/hooks/use-toast';
 
 interface AppContextType {
@@ -60,6 +67,9 @@ interface AppContextType {
     record: Omit<PersonalRecord, 'id' | 'date'>
   ) => Promise<void>;
   deletePersonalRecord: (recordId: string) => Promise<void>;
+  bodyWeightEntries: BodyWeightEntry[];
+  addBodyWeightEntry: (weightKg: number) => Promise<void>;
+  deleteBodyWeightEntry: (entryId: string) => Promise<void>;
   isLoading: boolean;
   clearAllData: () => Promise<void>;
 }
@@ -79,6 +89,9 @@ export const AppContext = createContext<AppContextType>({
   personalRecords: [],
   addPersonalRecord: async () => {},
   deletePersonalRecord: async () => {},
+  bodyWeightEntries: [],
+  addBodyWeightEntry: async () => {},
+  deleteBodyWeightEntry: async () => {},
   isLoading: true,
   clearAllData: async () => {},
 });
@@ -92,6 +105,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     CompletedWorkout[]
   >([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
+  const [bodyWeightEntries, setBodyWeightEntries] = useState<BodyWeightEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -100,11 +114,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (user && areServicesAvailable) {
         setIsLoading(true);
         try {
-          const [profile, plans, completed, records] = await Promise.all([
+          const [profile, plans, completed, records, weightEntries] = await Promise.all([
             getUserProfile(user.uid),
             getWorkoutPlans(user.uid),
             getCompletedWorkouts(user.uid),
             getPersonalRecords(user.uid),
+            getBodyWeightEntries(user.uid),
           ]);
           setUserProfileState(profile);
           setAllPlansState(plans);
@@ -118,6 +133,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           }
           setCompletedWorkouts(completed);
           setPersonalRecords(records);
+          setBodyWeightEntries(weightEntries);
         } catch (error) {
           console.error('Failed to load data from Firestore', error);
         } finally {
@@ -129,6 +145,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setAllPlansState([]);
         setCompletedWorkouts([]);
         setPersonalRecords([]);
+        setBodyWeightEntries([]);
         setIsLoading(false);
       }
     };
@@ -311,6 +328,35 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     [user, toast]
   );
 
+  const addBodyWeightEntry = useCallback(
+    async (weightKg: number) => {
+      if (user) {
+        const entry = await fbAddBodyWeightEntry(user.uid, weightKg);
+        if (entry) {
+          setBodyWeightEntries((prev) =>
+            [...prev, entry].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          );
+        }
+      }
+    },
+    [user]
+  );
+
+  const deleteBodyWeightEntry = useCallback(
+    async (entryId: string) => {
+      if (user) {
+        try {
+          await fbDeleteBodyWeightEntry(user.uid, entryId);
+          setBodyWeightEntries((prev) => prev.filter((e) => e.id !== entryId));
+        } catch (e) {
+          console.error('Failed to delete body weight entry', e);
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not delete entry. Please try again.' });
+        }
+      }
+    },
+    [user, toast]
+  );
+
   const clearAllData = useCallback(async () => {
     if (user) {
       setIsLoading(true);
@@ -320,12 +366,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           clearWorkoutPlans(user.uid),
           clearCompletedWorkouts(user.uid),
           clearPersonalRecords(user.uid),
+          clearBodyWeightEntries(user.uid),
         ]);
         setUserProfileState(null);
         setActivePlanState(null);
         setAllPlansState([]);
         setCompletedWorkouts([]);
         setPersonalRecords([]);
+        setBodyWeightEntries([]);
       } catch (error) {
         console.error('Failed to clear data', error);
       } finally {
@@ -351,6 +399,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         personalRecords,
         addPersonalRecord,
         deletePersonalRecord,
+        bodyWeightEntries,
+        addBodyWeightEntry,
+        deleteBodyWeightEntry,
         isLoading: isLoading || userLoading || !areServicesAvailable,
         clearAllData,
       }}

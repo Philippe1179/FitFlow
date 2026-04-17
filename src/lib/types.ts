@@ -41,6 +41,12 @@ export interface CompletedWorkout {
   weightUnitStored?: 'kg';
 }
 
+export type BodyWeightEntry = {
+  id: string;
+  weight: number; // stored in kg
+  date: string; // ISO string
+};
+
 export type PersonalRecord = {
   id: string;
   exerciseName: string;

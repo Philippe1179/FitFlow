@@ -2,11 +2,11 @@
 import { useContext, useMemo, useState, useTransition } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { differenceInCalendarDays, parseISO, startOfWeek, format } from 'date-fns';
 import { calculateStreak } from '@/lib/utils';
 import { Button, buttonVariants } from './ui/button';
-import { Wand2, Award, Repeat, Zap, CalendarDays, Plus, Trash2, History } from 'lucide-react';
+import { Wand2, Award, Repeat, Zap, CalendarDays, Plus, Trash2, History, Scale } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { adjustWorkoutPlanAction } from '@/app/actions';
 import {
@@ -48,6 +48,9 @@ export default function ProgressDashboard() {
     personalRecords,
     deletePersonalRecord,
     deleteCompletedWorkout,
+    bodyWeightEntries,
+    addBodyWeightEntry,
+    deleteBodyWeightEntry,
   } = useContext(AppContext);
   const { toast } = useToast();
   const [isAdjusting, startAdjustTransition] = useTransition();
@@ -55,6 +58,8 @@ export default function ProgressDashboard() {
   const [adjustment, setAdjustment] = useState<AdjustmentState>(null);
   const [isAddPrDialogOpen, setIsAddPrDialogOpen] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [weightInput, setWeightInput] = useState('');
+  const [isLoggingWeight, startWeightTransition] = useTransition();
 
   const sortedWorkouts = useMemo(() => {
     return [...completedWorkouts].sort(
@@ -296,6 +301,86 @@ export default function ProgressDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle className="flex items-center">
+              <Scale className="mr-2" />
+              Body Weight
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                placeholder={userProfile?.displayWeightUnit === 'lbs' ? 'lbs' : 'kg'}
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                className="w-20 h-8 text-sm px-2 rounded-md border border-input bg-background"
+              />
+              <Button
+                size="sm"
+                disabled={isLoggingWeight || !weightInput}
+                onClick={() => {
+                  const val = parseFloat(weightInput);
+                  if (isNaN(val) || val <= 0) return;
+                  startWeightTransition(async () => {
+                    const kg = userProfile?.displayWeightUnit === 'lbs' ? val * 0.453592 : val;
+                    await addBodyWeightEntry(kg);
+                    setWeightInput('');
+                    toast({ title: 'Weight logged!' });
+                  });
+                }}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Log
+              </Button>
+            </div>
+          </div>
+          <CardDescription>Track your weight over time.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {bodyWeightEntries.length > 1 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={bodyWeightEntries.map((e) => ({
+                date: format(new Date(e.date), 'MMM d'),
+                weight: userProfile?.displayWeightUnit === 'lbs'
+                  ? parseFloat((e.weight * 2.20462).toFixed(1))
+                  : parseFloat(e.weight.toFixed(1)),
+              }))}>
+                <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} stroke="#888888" />
+                <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="#888888" domain={['auto', 'auto']} />
+                <Tooltip formatter={(v) => [`${v} ${userProfile?.displayWeightUnit || 'kg'}`, 'Weight']} />
+                <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : bodyWeightEntries.length === 1 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Log at least 2 entries to see your trend.</p>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">No entries yet. Log your first weight above.</p>
+          )}
+          {bodyWeightEntries.length > 0 && (
+            <div className="mt-4 space-y-1 max-h-40 overflow-y-auto">
+              {[...bodyWeightEntries].reverse().map((e) => {
+                const display = userProfile?.displayWeightUnit === 'lbs'
+                  ? (e.weight * 2.20462).toFixed(1)
+                  : e.weight.toFixed(1);
+                return (
+                  <div key={e.id} className="flex justify-between items-center text-sm px-2 py-1 rounded hover:bg-muted/50 group">
+                    <span className="text-muted-foreground">{new Date(e.date).toLocaleDateString()}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">{display} {userProfile?.displayWeightUnit || 'kg'}</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => deleteBodyWeightEntry(e.id)}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -29,6 +29,10 @@ service cloud.firestore {
       match /personalRecords/{recordId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
+
+      match /bodyWeightEntries/{entryId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
   }
 }
