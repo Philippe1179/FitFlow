@@ -220,6 +220,8 @@ export default function WorkoutDayView({ day }: { day: string }) {
         const remaining = Math.ceil((timerEndTimeRef.current - Date.now()) / 1000);
         if (remaining <= 0) {
           clearInterval(interval!);
+          // App is in foreground — cancel the SW notification, in-app toast handles it
+          swRegistrationRef.current?.active?.postMessage({ type: 'CANCEL_NOTIFICATION' });
           setTimerSeconds(0);
           setIsTimerRunning(false);
         } else {
