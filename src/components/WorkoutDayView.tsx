@@ -220,8 +220,6 @@ export default function WorkoutDayView({ day }: { day: string }) {
         const remaining = Math.ceil((timerEndTimeRef.current - Date.now()) / 1000);
         if (remaining <= 0) {
           clearInterval(interval!);
-          // App is in foreground — cancel the SW notification, in-app toast handles it
-          swRegistrationRef.current?.active?.postMessage({ type: 'CANCEL_NOTIFICATION' });
           setTimerSeconds(0);
           setIsTimerRunning(false);
         } else {
@@ -236,13 +234,31 @@ export default function WorkoutDayView({ day }: { day: string }) {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && timerEndTimeRef.current) {
-        const remaining = Math.ceil((timerEndTimeRef.current - Date.now()) / 1000);
-        if (remaining <= 0) {
-          setTimerSeconds(0);
-          setIsTimerRunning(false);
-        } else {
-          setTimerSeconds(remaining);
+      const sw = swRegistrationRef.current?.active;
+      if (document.visibilityState === 'hidden') {
+        // App going to background — schedule notification for remaining time
+        if (timerEndTimeRef.current && sw && Notification.permission === 'granted') {
+          const remaining = timerEndTimeRef.current - Date.now();
+          if (remaining > 0) {
+            sw.postMessage({
+              type: 'SCHEDULE_NOTIFICATION',
+              endsAt: timerEndTimeRef.current,
+              title: 'Rest Over!',
+              body: 'Time for your next set.',
+            });
+          }
+        }
+      } else {
+        // App coming back to foreground — cancel notification, handle in-app
+        if (sw) sw.postMessage({ type: 'CANCEL_NOTIFICATION' });
+        if (timerEndTimeRef.current) {
+          const remaining = Math.ceil((timerEndTimeRef.current - Date.now()) / 1000);
+          if (remaining <= 0) {
+            setTimerSeconds(0);
+            setIsTimerRunning(false);
+          } else {
+            setTimerSeconds(remaining);
+          }
         }
       }
     };
@@ -287,17 +303,6 @@ export default function WorkoutDayView({ day }: { day: string }) {
     }
   }, [timerSeconds, isTimerRunning, audioContext, toast, activeTimerKey]);
 
-  const scheduleNotification = (endsAt: number, exName: string) => {
-    const sw = swRegistrationRef.current?.active;
-    if (!sw || Notification.permission !== 'granted') return;
-    sw.postMessage({
-      type: 'SCHEDULE_NOTIFICATION',
-      endsAt,
-      title: 'Rest Over!',
-      body: `Time for your next set of ${exName}.`,
-    });
-  };
-
   const cancelNotification = () => {
     const sw = swRegistrationRef.current?.active;
     if (!sw) return;
@@ -318,7 +323,6 @@ export default function WorkoutDayView({ day }: { day: string }) {
     setTimerSeconds(duration);
     setIsTimerRunning(true);
     setActiveTimerKey(`${exName}-${setIndex}`);
-    scheduleNotification(endTime, exName);
   };
 
   const stopTimer = () => {
