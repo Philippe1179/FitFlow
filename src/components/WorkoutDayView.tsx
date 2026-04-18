@@ -1,7 +1,7 @@
 'use client';
 
 import { AppContext } from '@/contexts/AppContext';
-import { useContext, useEffect, useState, useTransition } from 'react';
+import { useContext, useEffect, useRef, useState, useTransition } from 'react';
 import {
   Card,
   CardContent,
@@ -79,6 +79,8 @@ export default function WorkoutDayView({ day }: { day: string }) {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [activeTimerKey, setActiveTimerKey] = useState<string | null>(null);
+  const timerEndTimeRef = useRef<number | null>(null);
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   // Sound effect state
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
@@ -104,6 +106,12 @@ export default function WorkoutDayView({ day }: { day: string }) {
     setAudioContext(
       new (window.AudioContext || (window as any).webkitAudioContext)()
     );
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.ready.then((reg) => {
+        swRegistrationRef.current = reg;
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -197,22 +205,37 @@ export default function WorkoutDayView({ day }: { day: string }) {
     let interval: NodeJS.Timeout | null = null;
     if (isTimerRunning) {
       interval = setInterval(() => {
-        setTimerSeconds((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval!);
-            setIsTimerRunning(false); 
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+        if (!timerEndTimeRef.current) return;
+        const remaining = Math.ceil((timerEndTimeRef.current - Date.now()) / 1000);
+        if (remaining <= 0) {
+          clearInterval(interval!);
+          setTimerSeconds(0);
+          setIsTimerRunning(false);
+        } else {
+          setTimerSeconds(remaining);
+        }
+      }, 500);
     }
     return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
+      if (interval) clearInterval(interval);
     };
   }, [isTimerRunning]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && timerEndTimeRef.current) {
+        const remaining = Math.ceil((timerEndTimeRef.current - Date.now()) / 1000);
+        if (remaining <= 0) {
+          setTimerSeconds(0);
+          setIsTimerRunning(false);
+        } else {
+          setTimerSeconds(remaining);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   useEffect(() => {
     const playSound = (freq: number, duration: number) => {
@@ -251,17 +274,42 @@ export default function WorkoutDayView({ day }: { day: string }) {
     }
   }, [timerSeconds, isTimerRunning, audioContext, toast, activeTimerKey]);
 
-  const startTimer = (exName: string, setIndex: number) => {
+  const scheduleNotification = (endsAt: number, exName: string) => {
+    const sw = swRegistrationRef.current?.active;
+    if (!sw || Notification.permission !== 'granted') return;
+    sw.postMessage({
+      type: 'SCHEDULE_NOTIFICATION',
+      endsAt,
+      title: 'Rest Over!',
+      body: `Time for your next set of ${exName}.`,
+    });
+  };
+
+  const cancelNotification = () => {
+    const sw = swRegistrationRef.current?.active;
+    if (!sw) return;
+    sw.postMessage({ type: 'CANCEL_NOTIFICATION' });
+  };
+
+  const startTimer = async (exName: string, setIndex: number) => {
     const duration = restTimers[exName] || 60;
-    if (isTimerRunning) {
-      stopTimer();
+    if (isTimerRunning) stopTimer();
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission();
     }
+
+    const endTime = Date.now() + duration * 1000;
+    timerEndTimeRef.current = endTime;
     setTimerSeconds(duration);
     setIsTimerRunning(true);
     setActiveTimerKey(`${exName}-${setIndex}`);
+    scheduleNotification(endTime, exName);
   };
 
   const stopTimer = () => {
+    cancelNotification();
+    timerEndTimeRef.current = null;
     setIsTimerRunning(false);
     setActiveTimerKey(null);
     setTimerSeconds(0);
