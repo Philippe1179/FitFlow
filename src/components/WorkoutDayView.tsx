@@ -11,6 +11,7 @@ import {
 } from './ui/card';
 import {
   Bike,
+  Bell,
   Check,
   Flame,
   Dumbbell,
@@ -81,6 +82,7 @@ export default function WorkoutDayView({ day }: { day: string }) {
   const [activeTimerKey, setActiveTimerKey] = useState<string | null>(null);
   const timerEndTimeRef = useRef<number | null>(null);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
 
   // Sound effect state
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
@@ -112,7 +114,16 @@ export default function WorkoutDayView({ day }: { day: string }) {
         swRegistrationRef.current = reg;
       });
     }
+    if ('Notification' in window) {
+      setNotifPermission(Notification.permission);
+    }
   }, []);
+
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) return;
+    const result = await Notification.requestPermission();
+    setNotifPermission(result);
+  };
 
   useEffect(() => {
     if (dayPlan) {
@@ -296,7 +307,8 @@ export default function WorkoutDayView({ day }: { day: string }) {
     if (isTimerRunning) stopTimer();
 
     if ('Notification' in window && Notification.permission === 'default') {
-      await Notification.requestPermission();
+      const result = await Notification.requestPermission();
+      setNotifPermission(result);
     }
 
     const endTime = Date.now() + duration * 1000;
@@ -643,6 +655,18 @@ export default function WorkoutDayView({ day }: { day: string }) {
           Finish & Log Workout
         </Button>
       </div>
+
+      {notifPermission === 'default' && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <Bell className="h-4 w-4 shrink-0 text-primary" />
+            <span>Enable notifications to get alerted when your rest timer ends — even while using other apps.</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={requestNotificationPermission}>
+            Enable
+          </Button>
+        </div>
+      )}
 
       {dayPlan.warmUp && (
         <Card>
