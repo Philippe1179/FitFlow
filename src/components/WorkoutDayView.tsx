@@ -1,7 +1,7 @@
 'use client';
 
 import { AppContext } from '@/contexts/AppContext';
-import { useContext, useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, useTransition } from 'react';
 import {
   Card,
   CardContent,
@@ -86,6 +86,8 @@ export default function WorkoutDayView({ day }: { day: string }) {
 
   // Sound effect state
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const backgroundAudioRef = useRef<{ silentSource: AudioBufferSourceNode; beepGain: GainNode } | null>(null);
 
   // Explanation Dialog state
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
@@ -105,9 +107,9 @@ export default function WorkoutDayView({ day }: { day: string }) {
   const [isSuggestionLoading, startSuggestionTransition] = useTransition();
 
   useEffect(() => {
-    setAudioContext(
-      new (window.AudioContext || (window as any).webkitAudioContext)()
-    );
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    setAudioContext(ctx);
+    audioContextRef.current = ctx;
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
       navigator.serviceWorker.ready.then((reg) => {
@@ -232,24 +234,76 @@ export default function WorkoutDayView({ day }: { day: string }) {
     };
   }, [isTimerRunning]);
 
+  const scheduleBackgroundBeep = useCallback((remainingMs: number) => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+
+    // Silent loop keeps the iOS audio session alive so scheduled events can fire
+    const silentBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const silentSource = ctx.createBufferSource();
+    silentSource.buffer = silentBuffer;
+    silentSource.loop = true;
+    silentSource.connect(ctx.destination);
+    silentSource.start();
+
+    // Schedule the beep on the audio hardware clock — fires even when JS is suspended
+    const beepTime = ctx.currentTime + remainingMs / 1000;
+    const osc = ctx.createOscillator();
+    const beepGain = ctx.createGain();
+    osc.connect(beepGain);
+    beepGain.connect(ctx.destination);
+    beepGain.gain.value = 0.8;
+    osc.frequency.value = 880;
+    osc.start(beepTime);
+    osc.stop(beepTime + 0.8);
+
+    backgroundAudioRef.current = { silentSource, beepGain };
+  }, []);
+
+  const cancelBackgroundBeep = useCallback(() => {
+    const ctx = audioContextRef.current;
+    if (!backgroundAudioRef.current || !ctx) return;
+    const { silentSource, beepGain } = backgroundAudioRef.current;
+    try { silentSource.stop(); } catch {}
+    beepGain.gain.setValueAtTime(0, ctx.currentTime);
+    backgroundAudioRef.current = null;
+  }, []);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       const sw = swRegistrationRef.current?.active;
       if (document.visibilityState === 'hidden') {
-        // App going to background — schedule notification for remaining time
-        if (timerEndTimeRef.current && sw && Notification.permission === 'granted') {
+        if (timerEndTimeRef.current) {
           const remaining = timerEndTimeRef.current - Date.now();
           if (remaining > 0) {
-            sw.postMessage({
-              type: 'SCHEDULE_NOTIFICATION',
-              endsAt: timerEndTimeRef.current,
-              title: 'Rest Over!',
-              body: 'Time for your next set.',
-            });
+            // Option 2: schedule beep on the Web Audio hardware clock
+            scheduleBackgroundBeep(remaining);
+
+            if (sw && Notification.permission === 'granted') {
+              // Option 3: immediate notification showing the end time
+              const endTime = new Date(timerEndTimeRef.current).toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+              });
+              sw.postMessage({
+                type: 'SHOW_NOW_NOTIFICATION',
+                title: 'Rest Timer Running',
+                body: `Ends at ${endTime}`,
+              });
+
+              // Schedule the "Rest Over!" notification for when the timer ends
+              sw.postMessage({
+                type: 'SCHEDULE_NOTIFICATION',
+                endsAt: timerEndTimeRef.current,
+                title: 'Rest Over!',
+                body: 'Time for your next set.',
+              });
+            }
           }
         }
       } else {
-        // App coming back to foreground — cancel notification, handle in-app
+        cancelBackgroundBeep();
         if (sw) sw.postMessage({ type: 'CANCEL_NOTIFICATION' });
         if (timerEndTimeRef.current) {
           const remaining = Math.ceil((timerEndTimeRef.current - Date.now()) / 1000);
@@ -264,7 +318,7 @@ export default function WorkoutDayView({ day }: { day: string }) {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+  }, [scheduleBackgroundBeep, cancelBackgroundBeep]);
 
   useEffect(() => {
     const playSound = (freq: number, duration: number) => {
@@ -327,6 +381,7 @@ export default function WorkoutDayView({ day }: { day: string }) {
 
   const stopTimer = () => {
     cancelNotification();
+    cancelBackgroundBeep();
     timerEndTimeRef.current = null;
     setIsTimerRunning(false);
     setActiveTimerKey(null);
@@ -932,6 +987,11 @@ export default function WorkoutDayView({ day }: { day: string }) {
           <p className="text-muted-foreground text-sm uppercase tracking-widest">Resting after</p>
           <p className="text-xl font-semibold text-center">{stickyTimerLabel}</p>
           <span className="font-mono text-8xl font-bold text-primary tabular-nums">{formatTime(timerSeconds)}</span>
+          {timerEndTimeRef.current && (
+            <p className="text-muted-foreground text-sm">
+              ends at {new Date(timerEndTimeRef.current).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+            </p>
+          )}
           <Button variant="outline" size="lg" className="mt-4 text-lg px-10" onClick={stopTimer}>
             Skip Rest
           </Button>
