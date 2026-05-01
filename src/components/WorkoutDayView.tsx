@@ -64,7 +64,7 @@ type ExerciseState = {
 };
 
 export default function WorkoutDayView({ day }: { day: string }) {
-  const { activePlan, addCompletedWorkout, userProfile, savePlan } =
+  const { activePlan, addCompletedWorkout, userProfile, savePlan, completedWorkouts } =
     useContext(AppContext);
   const { toast } = useToast();
   const router = useRouter();
@@ -130,16 +130,42 @@ export default function WorkoutDayView({ day }: { day: string }) {
   useEffect(() => {
     if (dayPlan) {
       const initializeExerciseState = () => {
+        const previousDayWorkout = completedWorkouts
+          .filter((w) => w.day.toLowerCase() === dayPlan.day.toLowerCase())
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
         const initialState: ExerciseState = {};
         dayPlan?.exercises.forEach((ex) => {
-          initialState[ex.name] = {
-            sets: Array.from({ length: ex.sets }, () => ({
-              reps: '',
-              weight: '',
-              completed: false,
-            })),
-            notes: '',
-          };
+          const prevExercise = previousDayWorkout?.exercises.find(
+            (e) => e.exerciseName === ex.name
+          );
+
+          if (prevExercise && prevExercise.sets.length > 0) {
+            initialState[ex.name] = {
+              sets: Array.from({ length: ex.sets }, (_, i) => {
+                const prevSet = prevExercise.sets[i] ?? prevExercise.sets[prevExercise.sets.length - 1];
+                let displayWeight: string | number = '';
+                if (typeof prevSet.weight === 'number' && prevSet.weight !== 0) {
+                  displayWeight = userProfile?.displayWeightUnit === 'lbs'
+                    ? Math.round(prevSet.weight * 2.20462 * 10) / 10
+                    : prevSet.weight;
+                } else if (prevSet.weight !== 0) {
+                  displayWeight = prevSet.weight;
+                }
+                return { reps: prevSet.reps, weight: displayWeight, completed: false };
+              }),
+              notes: '',
+            };
+          } else {
+            initialState[ex.name] = {
+              sets: Array.from({ length: ex.sets }, () => ({
+                reps: '',
+                weight: '',
+                completed: false,
+              })),
+              notes: '',
+            };
+          }
         });
         setExerciseState(initialState);
       };
@@ -194,7 +220,7 @@ export default function WorkoutDayView({ day }: { day: string }) {
         setRestTimers(initialRestTimers);
       }
     }
-  }, [dayPlan, activePlan?.id]);
+  }, [dayPlan, activePlan?.id, completedWorkouts, userProfile]);
 
   useEffect(() => {
     if (dayPlan && Object.keys(exerciseState).length > 0) {
