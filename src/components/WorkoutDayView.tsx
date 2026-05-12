@@ -447,6 +447,34 @@ export default function WorkoutDayView({ day }: { day: string }) {
     }));
   };
 
+  const handleToggleAllSets = (exName: string) => {
+    const sets = exerciseState[exName]?.sets;
+    if (!sets) return;
+    const allCompleted = sets.every((s) => s.completed);
+    if (allCompleted) {
+      setExerciseState((prev) => ({
+        ...prev,
+        [exName]: {
+          ...prev[exName],
+          sets: prev[exName].sets.map((set) => ({ ...set, completed: false })),
+        },
+      }));
+    } else {
+      const template = sets.find((s) => s.reps !== '' || s.weight !== '') ?? sets[0];
+      setExerciseState((prev) => ({
+        ...prev,
+        [exName]: {
+          ...prev[exName],
+          sets: prev[exName].sets.map((set) => ({
+            completed: true,
+            reps: set.reps !== '' ? set.reps : template.reps,
+            weight: set.weight !== '' ? set.weight : template.weight,
+          })),
+        },
+      }));
+    }
+  };
+
   const handleCopyPreviousSet = (exName: string, setIndex: number) => {
     const previousSet = exerciseState[exName]?.sets[setIndex - 1];
     if (previousSet) {
@@ -833,7 +861,19 @@ export default function WorkoutDayView({ day }: { day: string }) {
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <div className="grid grid-cols-[auto,1fr,1fr] sm:grid-cols-[auto,1fr,1fr,auto] items-center gap-2 sm:gap-4 text-sm text-center font-semibold text-muted-foreground">
-                <div />
+                <Checkbox
+                  checked={
+                    exerciseState[ex.name]?.sets.every((s) => s.completed)
+                      ? true
+                      : exerciseState[ex.name]?.sets.some((s) => s.completed)
+                      ? 'indeterminate'
+                      : false
+                  }
+                  onCheckedChange={() => handleToggleAllSets(ex.name)}
+                  className="h-5 w-5"
+                  aria-label="Mark all sets done"
+                  title="Mark all sets done"
+                />
                 <div>Reps</div>
                 <div>Weight ({userProfile?.displayWeightUnit || 'kg'})</div>
                 <div className="hidden sm:block" />
