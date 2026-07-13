@@ -19,6 +19,7 @@ interface AddHiitWorkoutDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (workout: HiitWorkout) => void;
+  initialWorkout?: HiitWorkout | null;
 }
 
 const emptyInterval = (): HiitInterval => ({
@@ -31,19 +32,27 @@ export function AddHiitWorkoutDialog({
   open,
   onOpenChange,
   onSave,
+  initialWorkout,
 }: AddHiitWorkoutDialogProps) {
+  const isReviewMode = !!initialWorkout;
   const [name, setName] = useState('');
   const [rounds, setRounds] = useState('3');
   const [intervals, setIntervals] = useState<HiitInterval[]>([emptyInterval()]);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) {
+    if (open && initialWorkout) {
+      setName(initialWorkout.name);
+      setRounds(String(initialWorkout.rounds));
+      setIntervals(
+        initialWorkout.intervals.length > 0 ? initialWorkout.intervals : [emptyInterval()]
+      );
+    } else if (open && !initialWorkout) {
       setName('');
       setRounds('3');
       setIntervals([emptyInterval()]);
     }
-  }, [open]);
+  }, [open, initialWorkout]);
 
   const updateInterval = (
     index: number,
@@ -91,10 +100,11 @@ export function AddHiitWorkoutDialog({
     }
 
     onSave({
+      ...(initialWorkout?.id ? { id: initialWorkout.id } : {}),
       name,
       rounds: roundsNum,
       intervals: validIntervals,
-      source: 'manual',
+      source: initialWorkout?.source || 'manual',
     });
 
     onOpenChange(false);
@@ -104,9 +114,11 @@ export function AddHiitWorkoutDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create HIIT Workout</DialogTitle>
+          <DialogTitle>{isReviewMode ? 'Review AI-Generated Workout' : 'Create HIIT Workout'}</DialogTitle>
           <DialogDescription>
-            Build a work/rest circuit to repeat for a set number of rounds.
+            {isReviewMode
+              ? 'Edit anything before saving — nothing is saved yet.'
+              : 'Build a work/rest circuit to repeat for a set number of rounds.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2 max-h-[60vh] overflow-y-auto pr-1">

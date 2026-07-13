@@ -23,16 +23,6 @@ import { AddHiitWorkoutDialog } from './AddHiitWorkoutDialog';
 import { useToast } from '@/hooks/use-toast';
 import { createHiitWorkoutAction } from '@/app/actions';
 import type { HiitWorkout } from '@/lib/types';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from './ui/dialog';
-import { Skeleton } from './ui/skeleton';
 
 const isSameDay = (isoA: string, isoB: string) =>
   new Date(isoA).toDateString() === new Date(isoB).toDateString();
@@ -54,11 +44,10 @@ export default function CardioView() {
   const [isLoggingSteps, startLoggingSteps] = useTransition();
 
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [generatedWorkout, setGeneratedWorkout] = useState<HiitWorkout | null>(null);
 
   const [durationInput, setDurationInput] = useState('15');
   const [isGenerating, startGenerating] = useTransition();
-  const [generatedWorkout, setGeneratedWorkout] = useState<HiitWorkout | null>(null);
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const dailyStepGoal = userProfile?.dailyStepGoal || 10000;
   const today = new Date().toISOString();
@@ -99,34 +88,29 @@ export default function CardioView() {
   const handleGenerate = () => {
     if (!userProfile) return;
     const duration = parseInt(durationInput, 10) || 15;
-    setIsReviewOpen(true);
-    setGeneratedWorkout(null);
     startGenerating(async () => {
       const result = await createHiitWorkoutAction(userProfile, duration);
       if (result.success && result.data) {
         setGeneratedWorkout({ ...result.data, source: 'ai' });
+        setIsManualDialogOpen(true);
       } else {
         toast({
           variant: 'destructive',
           title: 'Error',
           description: result.error,
         });
-        setIsReviewOpen(false);
       }
     });
   };
 
-  const handleAcceptGenerated = async () => {
-    if (!generatedWorkout) return;
-    await saveHiitWorkout(generatedWorkout);
-    toast({ title: 'HIIT Workout Saved!', description: generatedWorkout.name });
-    setIsReviewOpen(false);
-    setGeneratedWorkout(null);
-  };
-
-  const handleSaveManual = async (workout: HiitWorkout) => {
+  const handleSaveHiitWorkout = async (workout: HiitWorkout) => {
     await saveHiitWorkout(workout);
     toast({ title: 'HIIT Workout Saved!', description: workout.name });
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsManualDialogOpen(open);
+    if (!open) setGeneratedWorkout(null);
   };
 
   return (
@@ -218,9 +202,15 @@ export default function CardioView() {
                 title="Target duration (minutes)"
               />
               <Button size="sm" variant="outline" onClick={handleGenerate} disabled={isGenerating}>
-                <Wand2 className="mr-1 h-4 w-4" /> Generate with AI
+                <Wand2 className="mr-1 h-4 w-4" /> {isGenerating ? 'Generating...' : 'Generate with AI'}
               </Button>
-              <Button size="sm" onClick={() => setIsManualDialogOpen(true)}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setGeneratedWorkout(null);
+                  setIsManualDialogOpen(true);
+                }}
+              >
                 <Plus className="mr-1 h-4 w-4" /> Create Manually
               </Button>
             </div>
@@ -318,53 +308,10 @@ export default function CardioView() {
 
       <AddHiitWorkoutDialog
         open={isManualDialogOpen}
-        onOpenChange={setIsManualDialogOpen}
-        onSave={handleSaveManual}
+        onOpenChange={handleDialogOpenChange}
+        onSave={handleSaveHiitWorkout}
+        initialWorkout={generatedWorkout}
       />
-
-      <Dialog open={isReviewOpen} onOpenChange={setIsReviewOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Generated HIIT Workout</DialogTitle>
-            <DialogDescription>Review before saving to your list.</DialogDescription>
-          </DialogHeader>
-          <div className="py-2 max-h-[60vh] overflow-y-auto space-y-3">
-            {!generatedWorkout ? (
-              <div className="space-y-3">
-                <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-              </div>
-            ) : (
-              <>
-                <h3 className="text-lg font-semibold text-primary">{generatedWorkout.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {generatedWorkout.rounds} rounds of:
-                </p>
-                <ul className="space-y-1 text-sm">
-                  {generatedWorkout.intervals.map((interval, i) => (
-                    <li key={i} className="flex justify-between rounded-md p-2 bg-muted/50">
-                      <span>{interval.name}</span>
-                      <span className="text-muted-foreground">
-                        {interval.workSeconds}s work / {interval.restSeconds}s rest
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button onClick={handleAcceptGenerated} disabled={!generatedWorkout}>
-              Save Workout
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
