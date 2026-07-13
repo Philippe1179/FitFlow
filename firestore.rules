@@ -33,6 +33,14 @@ service cloud.firestore {
       match /bodyWeightEntries/{entryId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
+
+      match /cardioLogEntries/{entryId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      match /hiitWorkouts/{workoutId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
   }
 }

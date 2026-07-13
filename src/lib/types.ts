@@ -14,6 +14,7 @@ export type UserProfile = {
   skillLevel: 'beginner' | 'intermediate' | 'advanced';
   existingPlan?: string;
   activePlanId?: string;
+  dailyStepGoal?: number;
 };
 
 export type WorkoutPlan = GenerateWorkoutPlanOutput & {
@@ -53,4 +54,26 @@ export type PersonalRecord = {
   weight: number; // Stored in kg
   reps: number;
   date: string; // ISO string
+};
+
+export type CardioLogEntry = {
+  id: string;
+  date: string; // ISO string
+  type: 'steps' | 'hiit';
+  steps?: number; // present when type === 'steps'
+  hiitWorkoutName?: string; // present when type === 'hiit'
+};
+
+export type HiitInterval = {
+  name: string;
+  workSeconds: number;
+  restSeconds: number;
+};
+
+export type HiitWorkout = {
+  id?: string;
+  name: string;
+  rounds: number;
+  intervals: HiitInterval[]; // one circuit "lap", repeated `rounds` times
+  source: 'ai' | 'manual';
 };

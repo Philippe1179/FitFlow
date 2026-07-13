@@ -21,6 +21,7 @@ import {
   Home,
   Sun,
   Library,
+  Footprints,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -57,6 +58,7 @@ function NavItems() {
     { href: '/', label: 'Home', icon: Home, requiresAuth: true },
     { href: '/plan', label: 'My Plan', icon: CalendarDays, requiresAuth: true },
     { href: '/plans', label: 'Manage Plans', icon: Library, requiresAuth: true },
+    { href: '/cardio', label: 'Cardio', icon: Footprints, requiresAuth: true },
     { href: '/progress', label: 'Progress', icon: LineChart, requiresAuth: true },
     { href: '/onboarding', label: 'Profile', icon: User, requiresAuth: true },
   ];

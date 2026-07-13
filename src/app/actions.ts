@@ -4,6 +4,7 @@ import { adjustWorkoutPlanBasedOnProgress } from '@/ai/flows/adjust-workout-plan
 import { getExerciseExplanation } from '@/ai/flows/get-exercise-explanation';
 import { generateWorkoutPlan } from '@/ai/flows/generate-personalized-workout-plan';
 import { suggestAlternativeExercise } from '@/ai/flows/suggest-alternative-exercise';
+import { generateHiitWorkout } from '@/ai/flows/generate-hiit-workout';
 import type {
   CompletedWorkout,
   UserProfile,
@@ -63,6 +64,26 @@ export async function getExerciseExplanationAction(exerciseName: string) {
       error instanceof Error
         ? error.message
         : 'Failed to get exercise explanation.';
+    return { success: false, error: message };
+  }
+}
+
+export async function createHiitWorkoutAction(
+  userProfile: UserProfile,
+  targetDurationMinutes: number
+) {
+  try {
+    const workout = await generateHiitWorkout({
+      fitnessGoals: userProfile.fitnessGoals,
+      availableEquipment: userProfile.availableEquipment,
+      skillLevel: userProfile.skillLevel,
+      targetDurationMinutes,
+    });
+    return { success: true, data: workout };
+  } catch (error) {
+    console.error(error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to generate HIIT workout.';
     return { success: false, error: message };
   }
 }

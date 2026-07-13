@@ -13,6 +13,8 @@ import type {
   CompletedWorkout,
   PersonalRecord,
   BodyWeightEntry,
+  CardioLogEntry,
+  HiitWorkout,
 } from '@/lib/types';
 import { useFirebase } from '@/firebase';
 import {
@@ -44,6 +46,18 @@ import {
   getBodyWeightEntries,
   clearBodyWeightEntries,
 } from '@/firebase/firestore/body-weight';
+import {
+  addCardioLogEntry as fbAddCardioLogEntry,
+  deleteCardioLogEntry as fbDeleteCardioLogEntry,
+  getCardioLogEntries,
+  clearCardioLogEntries,
+} from '@/firebase/firestore/cardio-log';
+import {
+  saveHiitWorkout as fbSaveHiitWorkout,
+  deleteHiitWorkout as fbDeleteHiitWorkout,
+  getHiitWorkouts,
+  clearHiitWorkouts,
+} from '@/firebase/firestore/hiit-workouts';
 import { useToast } from '@/hooks/use-toast';
 
 interface AppContextType {
@@ -70,6 +84,14 @@ interface AppContextType {
   bodyWeightEntries: BodyWeightEntry[];
   addBodyWeightEntry: (weightKg: number) => Promise<void>;
   deleteBodyWeightEntry: (entryId: string) => Promise<void>;
+  cardioLogEntries: CardioLogEntry[];
+  addCardioLogEntry: (
+    entry: Omit<CardioLogEntry, 'id' | 'date'>
+  ) => Promise<void>;
+  deleteCardioLogEntry: (entryId: string) => Promise<void>;
+  hiitWorkouts: HiitWorkout[];
+  saveHiitWorkout: (workout: HiitWorkout) => Promise<HiitWorkout | undefined>;
+  deleteHiitWorkout: (workoutId: string) => Promise<void>;
   isLoading: boolean;
   clearAllData: () => Promise<void>;
 }
@@ -92,6 +114,12 @@ export const AppContext = createContext<AppContextType>({
   bodyWeightEntries: [],
   addBodyWeightEntry: async () => {},
   deleteBodyWeightEntry: async () => {},
+  cardioLogEntries: [],
+  addCardioLogEntry: async () => {},
+  deleteCardioLogEntry: async () => {},
+  hiitWorkouts: [],
+  saveHiitWorkout: async () => undefined,
+  deleteHiitWorkout: async () => {},
   isLoading: true,
   clearAllData: async () => {},
 });
@@ -106,6 +134,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   >([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [bodyWeightEntries, setBodyWeightEntries] = useState<BodyWeightEntry[]>([]);
+  const [cardioLogEntries, setCardioLogEntries] = useState<CardioLogEntry[]>([]);
+  const [hiitWorkouts, setHiitWorkouts] = useState<HiitWorkout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -114,12 +144,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (user && areServicesAvailable) {
         setIsLoading(true);
         try {
-          const [profile, plans, completed, records, weightEntries] = await Promise.all([
+          const [profile, plans, completed, records, weightEntries, cardioEntries, hiitWorkoutTemplates] = await Promise.all([
             getUserProfile(user.uid),
             getWorkoutPlans(user.uid),
             getCompletedWorkouts(user.uid),
             getPersonalRecords(user.uid),
             getBodyWeightEntries(user.uid),
+            getCardioLogEntries(user.uid),
+            getHiitWorkouts(user.uid),
           ]);
           setUserProfileState(profile);
           setAllPlansState(plans);
@@ -134,6 +166,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           setCompletedWorkouts(completed);
           setPersonalRecords(records);
           setBodyWeightEntries(weightEntries);
+          setCardioLogEntries(cardioEntries);
+          setHiitWorkouts(hiitWorkoutTemplates);
         } catch (error) {
           console.error('Failed to load data from Firestore', error);
         } finally {
@@ -146,6 +180,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setCompletedWorkouts([]);
         setPersonalRecords([]);
         setBodyWeightEntries([]);
+        setCardioLogEntries([]);
+        setHiitWorkouts([]);
         setIsLoading(false);
       }
     };
@@ -357,6 +393,80 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     [user, toast]
   );
 
+  const addCardioLogEntry = useCallback(
+    async (entry: Omit<CardioLogEntry, 'id' | 'date'>) => {
+      if (user) {
+        const newEntry = await fbAddCardioLogEntry(user.uid, entry);
+        if (newEntry) {
+          setCardioLogEntries((prev) =>
+            [...prev, newEntry].sort(
+              (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+            )
+          );
+        }
+      }
+    },
+    [user]
+  );
+
+  const deleteCardioLogEntry = useCallback(
+    async (entryId: string) => {
+      if (user) {
+        try {
+          await fbDeleteCardioLogEntry(user.uid, entryId);
+          setCardioLogEntries((prev) => prev.filter((e) => e.id !== entryId));
+        } catch (e) {
+          console.error('Failed to delete cardio log entry', e);
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not delete entry. Please try again.' });
+        }
+      }
+    },
+    [user, toast]
+  );
+
+  const saveHiitWorkout = useCallback(
+    async (workout: HiitWorkout) => {
+      if (!user) return;
+      try {
+        const savedWorkout = await fbSaveHiitWorkout(user.uid, workout);
+        setHiitWorkouts((prev) => {
+          const existing = prev.find((w) => w.id === savedWorkout.id);
+          if (existing) {
+            return prev.map((w) => (w.id === savedWorkout.id ? savedWorkout : w));
+          }
+          return [...prev, savedWorkout];
+        });
+        return savedWorkout;
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Error Saving HIIT Workout',
+          description: 'Could not save the HIIT workout. Please try again.',
+        });
+      }
+    },
+    [user, toast]
+  );
+
+  const deleteHiitWorkout = useCallback(
+    async (workoutId: string) => {
+      if (user) {
+        try {
+          await fbDeleteHiitWorkout(user.uid, workoutId);
+          setHiitWorkouts((prev) => prev.filter((w) => w.id !== workoutId));
+        } catch (e) {
+          console.error('Failed to delete HIIT workout', e);
+          toast({
+            variant: 'destructive',
+            title: 'Error Deleting HIIT Workout',
+            description: 'Could not delete the HIIT workout. Please try again.',
+          });
+        }
+      }
+    },
+    [user, toast]
+  );
+
   const clearAllData = useCallback(async () => {
     if (user) {
       setIsLoading(true);
@@ -367,6 +477,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           clearCompletedWorkouts(user.uid),
           clearPersonalRecords(user.uid),
           clearBodyWeightEntries(user.uid),
+          clearCardioLogEntries(user.uid),
+          clearHiitWorkouts(user.uid),
         ]);
         setUserProfileState(null);
         setActivePlanState(null);
@@ -374,6 +486,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setCompletedWorkouts([]);
         setPersonalRecords([]);
         setBodyWeightEntries([]);
+        setCardioLogEntries([]);
+        setHiitWorkouts([]);
       } catch (error) {
         console.error('Failed to clear data', error);
       } finally {
@@ -402,6 +516,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         bodyWeightEntries,
         addBodyWeightEntry,
         deleteBodyWeightEntry,
+        cardioLogEntries,
+        addCardioLogEntry,
+        deleteCardioLogEntry,
+        hiitWorkouts,
+        saveHiitWorkout,
+        deleteHiitWorkout,
         isLoading: isLoading || userLoading || !areServicesAvailable,
         clearAllData,
       }}
