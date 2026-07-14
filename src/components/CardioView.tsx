@@ -17,6 +17,7 @@ import {
   Play,
   History,
   Target,
+  Pencil,
 } from 'lucide-react';
 import { NumberPickerDialog } from './NumberPickerDialog';
 import { AddHiitWorkoutDialog } from './AddHiitWorkoutDialog';
@@ -44,7 +45,7 @@ export default function CardioView() {
   const [isLoggingSteps, startLoggingSteps] = useTransition();
 
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
-  const [generatedWorkout, setGeneratedWorkout] = useState<HiitWorkout | null>(null);
+  const [dialogWorkout, setDialogWorkout] = useState<HiitWorkout | null>(null);
 
   const [durationInput, setDurationInput] = useState('15');
   const [isGenerating, startGenerating] = useTransition();
@@ -91,7 +92,7 @@ export default function CardioView() {
     startGenerating(async () => {
       const result = await createHiitWorkoutAction(userProfile, duration);
       if (result.success && result.data) {
-        setGeneratedWorkout({ ...result.data, source: 'ai' });
+        setDialogWorkout({ ...result.data, source: 'ai' });
         setIsManualDialogOpen(true);
       } else {
         toast({
@@ -110,7 +111,7 @@ export default function CardioView() {
 
   const handleDialogOpenChange = (open: boolean) => {
     setIsManualDialogOpen(open);
-    if (!open) setGeneratedWorkout(null);
+    if (!open) setDialogWorkout(null);
   };
 
   return (
@@ -207,7 +208,7 @@ export default function CardioView() {
               <Button
                 size="sm"
                 onClick={() => {
-                  setGeneratedWorkout(null);
+                  setDialogWorkout(null);
                   setIsManualDialogOpen(true);
                 }}
               >
@@ -239,9 +240,21 @@ export default function CardioView() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    onClick={() => {
+                      setDialogWorkout(workout);
+                      setIsManualDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                    <span className="sr-only">Edit {workout.name}</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => workout.id && deleteHiitWorkout(workout.id)}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
+                    <span className="sr-only">Delete {workout.name}</span>
                   </Button>
                 </div>
               </div>
@@ -310,7 +323,7 @@ export default function CardioView() {
         open={isManualDialogOpen}
         onOpenChange={handleDialogOpenChange}
         onSave={handleSaveHiitWorkout}
-        initialWorkout={generatedWorkout}
+        initialWorkout={dialogWorkout}
       />
     </div>
   );

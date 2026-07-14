@@ -34,7 +34,8 @@ export function AddHiitWorkoutDialog({
   onSave,
   initialWorkout,
 }: AddHiitWorkoutDialogProps) {
-  const isReviewMode = !!initialWorkout;
+  const isEditingSaved = !!initialWorkout?.id;
+  const isReviewMode = !!initialWorkout && !isEditingSaved;
   const [name, setName] = useState('');
   const [rounds, setRounds] = useState('3');
   const [intervals, setIntervals] = useState<HiitInterval[]>([emptyInterval()]);
@@ -114,9 +115,17 @@ export function AddHiitWorkoutDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isReviewMode ? 'Review AI-Generated Workout' : 'Create HIIT Workout'}</DialogTitle>
+          <DialogTitle>
+            {isEditingSaved
+              ? 'Edit HIIT Workout'
+              : isReviewMode
+              ? 'Review AI-Generated Workout'
+              : 'Create HIIT Workout'}
+          </DialogTitle>
           <DialogDescription>
-            {isReviewMode
+            {isEditingSaved
+              ? 'Update this workout — changes apply when you save.'
+              : isReviewMode
               ? 'Edit anything before saving — nothing is saved yet.'
               : 'Build a work/rest circuit to repeat for a set number of rounds.'}
           </DialogDescription>
@@ -198,7 +207,7 @@ export function AddHiitWorkoutDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>Save HIIT Workout</Button>
+          <Button onClick={handleSave}>{isEditingSaved ? 'Save Changes' : 'Save HIIT Workout'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
