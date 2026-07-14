@@ -11,15 +11,18 @@ import {
 } from './ui/card';
 import { Button } from './ui/button';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, Moon, Repeat, Zap } from 'lucide-react';
-import { getTodayDayName, calculateStreak } from '@/lib/utils';
+import { ArrowRight, CheckCircle2, Flame, Footprints, Moon, Repeat, Zap } from 'lucide-react';
+import { getTodayDayName, calculateStreak, getTodayCardioStats } from '@/lib/utils';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images.json';
 
 export default function Dashboard() {
-  const { userProfile, activePlan, completedWorkouts } = useContext(AppContext);
+  const { userProfile, activePlan, completedWorkouts, cardioLogEntries } = useContext(AppContext);
   const today = getTodayDayName();
+  const dailyStepGoal = userProfile?.dailyStepGoal || 10000;
+  const { steps: todaySteps, didHiit: didHiitToday } = getTodayCardioStats(cardioLogEntries);
+  const cardioGoalMet = todaySteps >= dailyStepGoal || didHiitToday;
 
   const planForToday = activePlan?.weeklyWorkoutPlan.find(
     (p) => p.day.toLowerCase() === today.toLowerCase()
@@ -100,6 +103,49 @@ export default function Dashboard() {
                     {isTodayCompleted ? 'Review Workout' : isRestDay ? 'View Suggestions' : 'Start Workout'}
                     <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Today's Cardio</CardTitle>
+              {cardioGoalMet && (
+                <span className="flex items-center gap-1 text-sm font-medium text-primary">
+                  <CheckCircle2 className="h-4 w-4" /> Goal Met
+                </span>
+              )}
+            </div>
+            <CardDescription>
+              Hit your daily step goal, or swap in a HIIT session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <Footprints className="w-8 h-8 text-muted-foreground shrink-0" />
+              <div>
+                <div className="text-2xl font-bold">
+                  {todaySteps.toLocaleString()}
+                  <span className="text-base font-normal text-muted-foreground">
+                    {' '}
+                    / {dailyStepGoal.toLocaleString()} steps
+                  </span>
+                </div>
+                {didHiitToday && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                    <Flame className="h-4 w-4" /> HIIT session completed today
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+          <CardContent>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/cardio">
+                Go to Cardio
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
             </Button>
           </CardContent>
         </Card>

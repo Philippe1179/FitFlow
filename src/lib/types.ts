@@ -75,5 +75,6 @@ export type HiitWorkout = {
   name: string;
   rounds: number;
   intervals: HiitInterval[]; // one circuit "lap", repeated `rounds` times
+  restBetweenRoundsSeconds?: number; // rest after finishing a full round, before the next one starts
   source: 'ai' | 'manual';
 };

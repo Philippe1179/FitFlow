@@ -46,6 +46,13 @@ const GenerateHiitWorkoutOutputSchema = z.object({
   intervals: z
     .array(HiitIntervalSchema)
     .describe('The ordered list of exercises that make up one lap of the circuit.'),
+  restBetweenRoundsSeconds: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      'Rest in seconds after finishing a full round/lap of the circuit, before the next round starts. Usually longer than the rest between individual exercises.'
+    ),
 });
 export type GenerateHiitWorkoutOutput = z.infer<
   typeof GenerateHiitWorkoutOutputSchema
@@ -78,6 +85,7 @@ This HIIT session is meant to be a substitute cardio option for a day when the u
 - Choose exercises appropriate for the user's skill level.
 - Design 4-8 intervals for one circuit "lap".
 - Pick work/rest durations (in seconds) and a number of rounds so the total time roughly matches the target duration.
+- Pick a rest-between-rounds duration that is distinct from (usually longer than) the rest between individual exercises, since it's a recovery break after a full lap of the circuit.
 - Give the circuit a short, motivating name.
 
 Provide the output in the specified JSON format.`,

@@ -43,6 +43,7 @@ export function AddHiitWorkoutDialog({
   const isReviewMode = !!initialWorkout && !isEditingSaved;
   const [name, setName] = useState('');
   const [rounds, setRounds] = useState('3');
+  const [restBetweenRounds, setRestBetweenRounds] = useState('30');
   const [intervals, setIntervals] = useState<HiitInterval[]>([emptyInterval()]);
   const [rerollPreferences, setRerollPreferences] = useState('');
   const [rerollingIndex, setRerollingIndex] = useState<number | null>(null);
@@ -53,12 +54,14 @@ export function AddHiitWorkoutDialog({
     if (open && initialWorkout) {
       setName(initialWorkout.name);
       setRounds(String(initialWorkout.rounds));
+      setRestBetweenRounds(String(initialWorkout.restBetweenRoundsSeconds ?? 30));
       setIntervals(
         initialWorkout.intervals.length > 0 ? initialWorkout.intervals : [emptyInterval()]
       );
     } else if (open && !initialWorkout) {
       setName('');
       setRounds('3');
+      setRestBetweenRounds('30');
       setIntervals([emptyInterval()]);
     }
     if (open) {
@@ -137,11 +140,14 @@ export function AddHiitWorkoutDialog({
       return;
     }
 
+    const restBetweenRoundsNum = parseInt(restBetweenRounds, 10);
+
     onSave({
       ...(initialWorkout?.id ? { id: initialWorkout.id } : {}),
       name,
       rounds: roundsNum,
       intervals: validIntervals,
+      restBetweenRoundsSeconds: isNaN(restBetweenRoundsNum) ? 0 : Math.max(0, restBetweenRoundsNum),
       source: initialWorkout?.source || 'manual',
     });
 
@@ -192,6 +198,21 @@ export function AddHiitWorkoutDialog({
                 onChange={(e) => setRounds(e.target.value)}
                 className="col-span-3"
               />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="hiit-round-rest" className="text-right">
+                Rest Between Rounds
+              </Label>
+              <div className="col-span-3 flex items-center gap-2">
+                <Input
+                  id="hiit-round-rest"
+                  type="number"
+                  value={restBetweenRounds}
+                  onChange={(e) => setRestBetweenRounds(e.target.value)}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">seconds — separate from each exercise's own rest below</span>
+              </div>
             </div>
 
             {userProfile && (

@@ -11,11 +11,14 @@ import { useToast } from '@/hooks/use-toast';
 import { ExerciseExplanationDialog } from './ExerciseExplanationDialog';
 
 type Segment = {
-  kind: 'work' | 'rest';
+  kind: 'work' | 'rest' | 'roundRest';
   label: string;
   seconds: number;
   roundNumber: number;
 };
+
+const segmentKindLabel = (kind: Segment['kind']) =>
+  kind === 'work' ? 'Work' : kind === 'roundRest' ? 'Round Break' : 'Rest';
 
 export default function HiitSessionView({ workoutId }: { workoutId: string }) {
   const { hiitWorkouts, addCardioLogEntry } = useContext(AppContext);
@@ -26,10 +29,17 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
   const segments = useMemo<Segment[]>(() => {
     if (!workout) return [];
     const list: Segment[] = [];
+    const roundRestSeconds = workout.restBetweenRoundsSeconds ?? 30;
     for (let round = 1; round <= workout.rounds; round++) {
-      workout.intervals.forEach((interval) => {
+      workout.intervals.forEach((interval, i) => {
+        const isLastIntervalInRound = i === workout.intervals.length - 1;
         list.push({ kind: 'work', label: interval.name, seconds: interval.workSeconds, roundNumber: round });
-        if (interval.restSeconds > 0) {
+        if (isLastIntervalInRound) {
+          const isLastRound = round === workout.rounds;
+          if (!isLastRound && roundRestSeconds > 0) {
+            list.push({ kind: 'roundRest', label: 'Rest Between Rounds', seconds: roundRestSeconds, roundNumber: round });
+          }
+        } else if (interval.restSeconds > 0) {
           list.push({ kind: 'rest', label: 'Rest', seconds: interval.restSeconds, roundNumber: round });
         }
       });
@@ -193,7 +203,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
               type: 'SCHEDULE_NOTIFICATION',
               endsAt: nextBoundaryAbs,
               title: nextSegment ? `Next: ${nextSegment.label}` : 'HIIT Session Complete!',
-              body: nextSegment ? `${nextSegment.kind === 'work' ? 'Work' : 'Rest'} — ${nextSegment.seconds}s` : 'Great job — session finished.',
+              body: nextSegment ? `${segmentKindLabel(nextSegment.kind)} — ${nextSegment.seconds}s` : 'Great job — session finished.',
             });
           }
         }
@@ -269,7 +279,11 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
               <Flame className="mr-2 text-primary" />
               {workout.rounds} rounds
             </CardTitle>
-            <CardDescription>Total time: {formatTime(Math.round(totalDurationMs / 1000))}</CardDescription>
+            <CardDescription>
+              Total time: {formatTime(Math.round(totalDurationMs / 1000))}
+              {workout.rounds > 1 &&
+                ` · ${workout.restBetweenRoundsSeconds ?? 30}s rest between rounds`}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {workout.intervals.map((interval, i) => (
@@ -318,7 +332,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
       {createPortal(
         <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6 p-8">
           <p className="text-muted-foreground text-sm uppercase tracking-widest">
-            Round {currentSegment.roundNumber} of {workout.rounds} · {currentSegment.kind === 'work' ? 'Work' : 'Rest'}
+            Round {currentSegment.roundNumber} of {workout.rounds} · {segmentKindLabel(currentSegment.kind)}
           </p>
           <p className="text-xl font-semibold text-center">{currentSegment.label}</p>
           <span className="font-mono text-8xl font-bold text-primary tabular-nums">
@@ -326,7 +340,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
           </span>
           {nextSegment && (
             <p className="text-muted-foreground text-sm">
-              Up next: {nextSegment.label} ({nextSegment.kind === 'work' ? 'Work' : 'Rest'})
+              Up next: {nextSegment.label} ({segmentKindLabel(nextSegment.kind)})
             </p>
           )}
           <div className="flex gap-3 mt-4">

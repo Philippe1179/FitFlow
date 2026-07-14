@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { differenceInCalendarDays, parseISO, subDays } from 'date-fns';
-import type { CompletedWorkout, WorkoutPlan } from './types';
+import type { CardioLogEntry, CompletedWorkout, WorkoutPlan } from './types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -9,6 +9,19 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getTodayDayName() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+export function isSameDay(isoA: string, isoB: string): boolean {
+  return new Date(isoA).toDateString() === new Date(isoB).toDateString();
+}
+
+export function getTodayCardioStats(entries: CardioLogEntry[]) {
+  const today = new Date().toISOString();
+  const steps = entries
+    .filter((e) => e.type === 'steps' && isSameDay(e.date, today))
+    .reduce((sum, e) => sum + (e.steps || 0), 0);
+  const didHiit = entries.some((e) => e.type === 'hiit' && isSameDay(e.date, today));
+  return { steps, didHiit };
 }
 
 export function calculateStreak(completedWorkouts: CompletedWorkout[], activePlan: WorkoutPlan): number {

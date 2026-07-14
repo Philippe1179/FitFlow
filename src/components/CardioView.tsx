@@ -36,9 +36,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { createHiitWorkoutAction } from '@/app/actions';
 import type { HiitWorkout } from '@/lib/types';
-
-const isSameDay = (isoA: string, isoB: string) =>
-  new Date(isoA).toDateString() === new Date(isoB).toDateString();
+import { getTodayCardioStats } from '@/lib/utils';
 
 export default function CardioView() {
   const {
@@ -64,17 +62,11 @@ export default function CardioView() {
   const [isGenerating, startGenerating] = useTransition();
 
   const dailyStepGoal = userProfile?.dailyStepGoal || 10000;
-  const today = new Date().toISOString();
 
-  const todaySteps = useMemo(() => {
-    return cardioLogEntries
-      .filter((e) => e.type === 'steps' && isSameDay(e.date, today))
-      .reduce((sum, e) => sum + (e.steps || 0), 0);
-  }, [cardioLogEntries, today]);
-
-  const didHiitToday = useMemo(() => {
-    return cardioLogEntries.some((e) => e.type === 'hiit' && isSameDay(e.date, today));
-  }, [cardioLogEntries, today]);
+  const { steps: todaySteps, didHiit: didHiitToday } = useMemo(
+    () => getTodayCardioStats(cardioLogEntries),
+    [cardioLogEntries]
+  );
 
   const goalMetToday = todaySteps >= dailyStepGoal || didHiitToday;
 
