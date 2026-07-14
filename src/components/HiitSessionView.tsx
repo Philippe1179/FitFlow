@@ -276,7 +276,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Flame className="mr-2 text-primary" />
+              <Flame className="mr-2 text-orange-500 dark:text-orange-400" />
               {workout.rounds} rounds
             </CardTitle>
             <CardDescription>
@@ -335,7 +335,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
             Round {currentSegment.roundNumber} of {workout.rounds} · {segmentKindLabel(currentSegment.kind)}
           </p>
           <p className="text-xl font-semibold text-center">{currentSegment.label}</p>
-          <span className="font-mono text-8xl font-bold text-primary tabular-nums">
+          <span className="font-mono text-8xl font-bold text-accent tabular-nums">
             {formatTime(remainingSeconds)}
           </span>
           {nextSegment && (

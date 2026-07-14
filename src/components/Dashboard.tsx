@@ -17,6 +17,8 @@ import { differenceInCalendarDays, parseISO } from 'date-fns';
 import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images.json';
 import { useToast } from '@/hooks/use-toast';
+import { ProgressRing } from './ProgressRing';
+import { cn } from '@/lib/utils';
 
 export default function Dashboard() {
   const {
@@ -147,7 +149,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <CardTitle>Today's Cardio</CardTitle>
               {cardioGoalMet && (
-                <span className="flex items-center gap-1 text-sm font-medium text-primary">
+                <span className="flex items-center gap-1 text-sm font-medium text-accent">
                   <CheckCircle2 className="h-4 w-4" /> Goal Met
                 </span>
               )}
@@ -157,10 +159,12 @@ export default function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-3">
-              <Footprints className="w-8 h-8 text-muted-foreground shrink-0" />
+            <div className="flex items-center gap-4">
+              <ProgressRing value={todaySteps} max={dailyStepGoal} size={72} strokeWidth={7}>
+                <Footprints className="h-6 w-6 text-accent" />
+              </ProgressRing>
               <div>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold font-headline">
                   {todaySteps.toLocaleString()}
                   <span className="text-base font-normal text-muted-foreground">
                     {' '}
@@ -169,7 +173,7 @@ export default function Dashboard() {
                 </div>
                 {didHiitToday && (
                   <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                    <Flame className="h-4 w-4" /> HIIT session completed today
+                    <Flame className="h-4 w-4 text-orange-500 dark:text-orange-400" /> HIIT session completed today
                   </p>
                 )}
               </div>
@@ -199,10 +203,15 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Activity Streak</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
+            <Zap
+              className={cn(
+                'h-4 w-4',
+                streak > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-muted-foreground'
+              )}
+            />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{streak}</div>
+            <div className="text-2xl font-bold font-headline">{streak}</div>
             <p className="text-xs text-muted-foreground">consecutive active days</p>
           </CardContent>
         </Card>

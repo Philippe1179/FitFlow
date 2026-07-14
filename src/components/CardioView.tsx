@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { NumberPickerDialog } from './NumberPickerDialog';
 import { AddHiitWorkoutDialog } from './AddHiitWorkoutDialog';
+import { ProgressRing } from './ProgressRing';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -132,7 +133,7 @@ export default function CardioView() {
           <div className="flex justify-between items-start">
             <div>
               <CardTitle className="flex items-center">
-                <Target className="mr-2" />
+                <Target className="mr-2 text-accent" />
                 Today's Goal
               </CardTitle>
               <CardDescription>
@@ -140,7 +141,7 @@ export default function CardioView() {
               </CardDescription>
             </div>
             {goalMetToday ? (
-              <div className="flex items-center gap-1 text-sm font-medium text-primary">
+              <div className="flex items-center gap-1 text-sm font-medium text-accent">
                 <CheckCircle2 className="h-5 w-5" /> Goal Met
               </div>
             ) : (
@@ -151,25 +152,33 @@ export default function CardioView() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Footprints className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{todaySteps.toLocaleString()}</span>
-              <span className="text-muted-foreground">
-                / {dailyStepGoal.toLocaleString()} steps
-              </span>
+          <div className="flex items-center gap-4">
+            <ProgressRing value={todaySteps} max={dailyStepGoal} size={104} strokeWidth={9}>
+              <div className="flex flex-col items-center">
+                <span className="text-lg font-bold font-headline leading-none">
+                  {todaySteps.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">
+                  / {dailyStepGoal.toLocaleString()}
+                </span>
+              </div>
+            </ProgressRing>
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <Footprints className="h-4 w-4 text-accent" /> Steps today
+              </div>
+              <NumberPickerDialog
+                title="Set Daily Step Goal"
+                initialValue={dailyStepGoal}
+                onSave={handleSetGoal}
+                incrementSteps={[500, 1000, 2500]}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    Edit Goal
+                  </Button>
+                }
+              />
             </div>
-            <NumberPickerDialog
-              title="Set Daily Step Goal"
-              initialValue={dailyStepGoal}
-              onSave={handleSetGoal}
-              incrementSteps={[500, 1000, 2500]}
-              trigger={
-                <Button variant="outline" size="sm">
-                  Edit Goal
-                </Button>
-              }
-            />
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -196,7 +205,7 @@ export default function CardioView() {
           <div className="flex justify-between items-start flex-wrap gap-2">
             <div>
               <CardTitle className="flex items-center">
-                <Flame className="mr-2" />
+                <Flame className="mr-2 text-orange-500 dark:text-orange-400" />
                 HIIT Workouts
               </CardTitle>
               <CardDescription>
@@ -317,9 +326,9 @@ export default function CardioView() {
                 >
                   <div className="flex items-center gap-2">
                     {entry.type === 'steps' ? (
-                      <Footprints className="h-4 w-4 text-muted-foreground" />
+                      <Footprints className="h-4 w-4 text-accent" />
                     ) : (
-                      <Flame className="h-4 w-4 text-muted-foreground" />
+                      <Flame className="h-4 w-4 text-orange-500 dark:text-orange-400" />
                     )}
                     <span>
                       {entry.type === 'steps'

@@ -224,10 +224,15 @@ export default function ProgressDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Activity Streak</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
+            <Zap
+              className={cn(
+                'h-4 w-4',
+                stats.streak > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-muted-foreground'
+              )}
+            />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.streak}</div>
+            <div className="text-2xl font-bold font-headline">{stats.streak}</div>
             <p className="text-xs text-muted-foreground">consecutive active days</p>
           </CardContent>
         </Card>
@@ -333,7 +338,7 @@ export default function ProgressDashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Footprints className="mr-2" />
+            <Footprints className="mr-2 text-accent" />
             Cardio Activity
           </CardTitle>
           <CardDescription>Steps this week, with your daily goal as a dashed line. The flame marks days you logged a HIIT session.</CardDescription>
@@ -359,11 +364,11 @@ export default function ProgressDashboard() {
               <Tooltip formatter={(v) => [`${v} steps`, 'Steps']} />
               <ReferenceLine
                 y={dailyStepGoal}
-                stroke="hsl(var(--primary))"
+                stroke="hsl(var(--accent))"
                 strokeDasharray="4 4"
-                strokeOpacity={0.6}
+                strokeOpacity={0.7}
               />
-              <Bar dataKey="steps" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="steps" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <div className="grid grid-cols-7 gap-1 mt-2 px-2">
@@ -372,7 +377,7 @@ export default function ProgressDashboard() {
                 <Flame
                   className={cn(
                     'h-4 w-4',
-                    day.hiit ? 'text-primary' : 'text-muted-foreground/20'
+                    day.hiit ? 'text-orange-500 dark:text-orange-400' : 'text-muted-foreground/20'
                   )}
                 />
                 <span className="text-xs text-muted-foreground">{day.name}</span>
