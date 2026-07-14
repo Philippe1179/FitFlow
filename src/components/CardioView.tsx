@@ -6,6 +6,7 @@ import { AppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import {
   Footprints,
   Plus,
@@ -48,6 +49,7 @@ export default function CardioView() {
   const [dialogWorkout, setDialogWorkout] = useState<HiitWorkout | null>(null);
 
   const [durationInput, setDurationInput] = useState('15');
+  const [generatePreferences, setGeneratePreferences] = useState('');
   const [isGenerating, startGenerating] = useTransition();
 
   const dailyStepGoal = userProfile?.dailyStepGoal || 10000;
@@ -90,7 +92,11 @@ export default function CardioView() {
     if (!userProfile) return;
     const duration = parseInt(durationInput, 10) || 15;
     startGenerating(async () => {
-      const result = await createHiitWorkoutAction(userProfile, duration);
+      const result = await createHiitWorkoutAction(
+        userProfile,
+        duration,
+        generatePreferences || undefined
+      );
       if (result.success && result.data) {
         setDialogWorkout({ ...result.data, source: 'ai' });
         setIsManualDialogOpen(true);
@@ -183,7 +189,7 @@ export default function CardioView() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-3">
           <div className="flex justify-between items-start flex-wrap gap-2">
             <div>
               <CardTitle className="flex items-center">
@@ -194,27 +200,33 @@ export default function CardioView() {
                 A high-intensity circuit is a great cardio-goal equivalent when you can't walk.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Input
-                type="number"
-                value={durationInput}
-                onChange={(e) => setDurationInput(e.target.value)}
-                className="w-16 h-9"
-                title="Target duration (minutes)"
-              />
-              <Button size="sm" variant="outline" onClick={handleGenerate} disabled={isGenerating}>
-                <Wand2 className="mr-1 h-4 w-4" /> {isGenerating ? 'Generating...' : 'Generate with AI'}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setDialogWorkout(null);
-                  setIsManualDialogOpen(true);
-                }}
-              >
-                <Plus className="mr-1 h-4 w-4" /> Create Manually
-              </Button>
-            </div>
+          </div>
+          <Textarea
+            value={generatePreferences}
+            onChange={(e) => setGeneratePreferences(e.target.value)}
+            placeholder='Equipment & preferences for AI generation (optional) — e.g. "I have a jump rope", "no exercises on the ground"'
+            className="min-h-[50px] text-sm"
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input
+              type="number"
+              value={durationInput}
+              onChange={(e) => setDurationInput(e.target.value)}
+              className="w-16 h-9"
+              title="Target duration (minutes)"
+            />
+            <Button size="sm" variant="outline" onClick={handleGenerate} disabled={isGenerating}>
+              <Wand2 className="mr-1 h-4 w-4" /> {isGenerating ? 'Generating...' : 'Generate with AI'}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setDialogWorkout(null);
+                setIsManualDialogOpen(true);
+              }}
+            >
+              <Plus className="mr-1 h-4 w-4" /> Create Manually
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -324,6 +336,7 @@ export default function CardioView() {
         onOpenChange={handleDialogOpenChange}
         onSave={handleSaveHiitWorkout}
         initialWorkout={dialogWorkout}
+        userProfile={userProfile}
       />
     </div>
   );

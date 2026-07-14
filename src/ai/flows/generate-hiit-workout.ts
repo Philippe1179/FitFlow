@@ -23,6 +23,12 @@ const GenerateHiitWorkoutInputSchema = z.object({
     .number()
     .positive()
     .describe('Roughly how many minutes the whole HIIT session should take, including rest.'),
+  additionalPreferences: z
+    .string()
+    .optional()
+    .describe(
+      'Free-text extra equipment or constraints from the user for this specific session (e.g. "I have a jump rope", "no exercises on the ground"). Overrides availableEquipment when there is a conflict.'
+    ),
 });
 export type GenerateHiitWorkoutInput = z.infer<
   typeof GenerateHiitWorkoutInputSchema
@@ -64,9 +70,11 @@ This HIIT session is meant to be a substitute cardio option for a day when the u
 - Available Equipment: {{{availableEquipment}}}
 - Skill Level: {{{skillLevel}}}
 - Target Total Duration: about {{{targetDurationMinutes}}} minutes (including rest)
+- Additional preferences/constraints for this session: {{{additionalPreferences}}}
 
 **Requirements:**
 - Only use exercises that fit the available equipment (use bodyweight exercises if equipment is limited).
+- If additional preferences/constraints are provided, they take priority over the general equipment/goals fields above — e.g. if the user mentions owning a specific item, prefer exercises that use it; if they exclude a movement type (like getting on the ground/floor), do not include any exercise involving that movement, and do not substitute it with a near-equivalent that still violates the constraint.
 - Choose exercises appropriate for the user's skill level.
 - Design 4-8 intervals for one circuit "lap".
 - Pick work/rest durations (in seconds) and a number of rounds so the total time roughly matches the target duration.

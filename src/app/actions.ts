@@ -5,8 +5,11 @@ import { getExerciseExplanation } from '@/ai/flows/get-exercise-explanation';
 import { generateWorkoutPlan } from '@/ai/flows/generate-personalized-workout-plan';
 import { suggestAlternativeExercise } from '@/ai/flows/suggest-alternative-exercise';
 import { generateHiitWorkout } from '@/ai/flows/generate-hiit-workout';
+import { suggestHiitInterval } from '@/ai/flows/suggest-hiit-interval';
 import type {
   CompletedWorkout,
+  HiitInterval,
+  HiitWorkout,
   UserProfile,
   WorkoutDayPlan,
   WorkoutPlan,
@@ -70,7 +73,8 @@ export async function getExerciseExplanationAction(exerciseName: string) {
 
 export async function createHiitWorkoutAction(
   userProfile: UserProfile,
-  targetDurationMinutes: number
+  targetDurationMinutes: number,
+  additionalPreferences?: string
 ) {
   try {
     const workout = await generateHiitWorkout({
@@ -78,12 +82,40 @@ export async function createHiitWorkoutAction(
       availableEquipment: userProfile.availableEquipment,
       skillLevel: userProfile.skillLevel,
       targetDurationMinutes,
+      additionalPreferences,
     });
     return { success: true, data: workout };
   } catch (error) {
     console.error(error);
     const message =
       error instanceof Error ? error.message : 'Failed to generate HIIT workout.';
+    return { success: false, error: message };
+  }
+}
+
+export async function suggestHiitIntervalAction(
+  exerciseToReplace: string,
+  userProfile: UserProfile,
+  currentWorkout: Pick<HiitWorkout, 'name' | 'rounds' | 'intervals'>,
+  additionalPreferences?: string
+) {
+  try {
+    const result = await suggestHiitInterval({
+      exerciseToReplace,
+      userProfileJson: JSON.stringify(userProfile),
+      currentWorkoutJson: JSON.stringify(currentWorkout),
+      additionalPreferences,
+    });
+    const interval: HiitInterval = {
+      name: result.name,
+      workSeconds: result.workSeconds,
+      restSeconds: result.restSeconds,
+    };
+    return { success: true, data: { interval, reasoning: result.reasoning } };
+  } catch (error) {
+    console.error(error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to get an interval suggestion.';
     return { success: false, error: message };
   }
 }

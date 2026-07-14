@@ -10,16 +10,19 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import type { HiitWorkout, HiitInterval } from '@/lib/types';
+import { Plus, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import type { HiitWorkout, HiitInterval, UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { suggestHiitIntervalAction } from '@/app/actions';
 
 interface AddHiitWorkoutDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (workout: HiitWorkout) => void;
   initialWorkout?: HiitWorkout | null;
+  userProfile: UserProfile | null;
 }
 
 const emptyInterval = (): HiitInterval => ({
@@ -33,12 +36,15 @@ export function AddHiitWorkoutDialog({
   onOpenChange,
   onSave,
   initialWorkout,
+  userProfile,
 }: AddHiitWorkoutDialogProps) {
   const isEditingSaved = !!initialWorkout?.id;
   const isReviewMode = !!initialWorkout && !isEditingSaved;
   const [name, setName] = useState('');
   const [rounds, setRounds] = useState('3');
   const [intervals, setIntervals] = useState<HiitInterval[]>([emptyInterval()]);
+  const [rerollPreferences, setRerollPreferences] = useState('');
+  const [rerollingIndex, setRerollingIndex] = useState<number | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -52,6 +58,10 @@ export function AddHiitWorkoutDialog({
       setName('');
       setRounds('3');
       setIntervals([emptyInterval()]);
+    }
+    if (open) {
+      setRerollPreferences('');
+      setRerollingIndex(null);
     }
   }, [open, initialWorkout]);
 
@@ -76,6 +86,31 @@ export function AddHiitWorkoutDialog({
 
   const removeInterval = (index: number) => {
     setIntervals((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleReroll = async (index: number) => {
+    if (!userProfile) return;
+    const target = intervals[index];
+    if (!target.name.trim()) return;
+    setRerollingIndex(index);
+    try {
+      const result = await suggestHiitIntervalAction(
+        target.name,
+        userProfile,
+        { name: name || 'HIIT Workout', rounds: parseInt(rounds, 10) || 1, intervals },
+        rerollPreferences || undefined
+      );
+      if (result.success && result.data) {
+        setIntervals((prev) =>
+          prev.map((interval, i) => (i === index ? result.data!.interval : interval))
+        );
+        toast({ title: `Swapped in "${result.data.interval.name}"`, description: result.data.reasoning });
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.error });
+      }
+    } finally {
+      setRerollingIndex(null);
+    }
   };
 
   const handleSave = () => {
@@ -156,6 +191,21 @@ export function AddHiitWorkoutDialog({
             />
           </div>
 
+          {userProfile && (
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="hiit-reroll-prefs" className="text-right pt-2">
+                AI Preferences
+              </Label>
+              <Textarea
+                id="hiit-reroll-prefs"
+                value={rerollPreferences}
+                onChange={(e) => setRerollPreferences(e.target.value)}
+                className="col-span-3 min-h-[60px]"
+                placeholder='e.g. "I have a jump rope", "no exercises on the ground"'
+              />
+            </div>
+          )}
+
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label>Intervals (one circuit lap)</Label>
@@ -166,7 +216,7 @@ export function AddHiitWorkoutDialog({
             {intervals.map((interval, index) => (
               <div
                 key={index}
-                className="grid grid-cols-[1fr,auto,auto,auto] items-center gap-2 rounded-md border p-2"
+                className="grid grid-cols-[1fr,auto,auto,auto,auto] items-center gap-2 rounded-md border p-2"
               >
                 <Input
                   value={interval.name}
@@ -187,6 +237,23 @@ export function AddHiitWorkoutDialog({
                   className="w-16"
                   title="Rest seconds"
                 />
+                {userProfile && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => handleReroll(index)}
+                    disabled={rerollingIndex !== null || !interval.name.trim()}
+                    title="Reroll this exercise with AI"
+                  >
+                    {rerollingIndex === index ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span className="sr-only">Reroll {interval.name}</span>
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -195,11 +262,13 @@ export function AddHiitWorkoutDialog({
                   disabled={intervals.length === 1}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
+                  <span className="sr-only">Remove {interval.name || 'interval'}</span>
                 </Button>
               </div>
             ))}
             <p className="text-xs text-muted-foreground">
               Columns: exercise name, work (seconds), rest (seconds).
+              {userProfile && ' Use the reroll icon to get an AI-suggested swap for one exercise.'}
             </p>
           </div>
         </div>

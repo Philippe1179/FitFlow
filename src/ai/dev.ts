@@ -7,3 +7,4 @@ import '@/ai/flows/adjust-workout-plan-based-on-progress.ts';
 import '@/ai/flows/get-exercise-explanation.ts';
 import '@/ai/flows/suggest-alternative-exercise.ts';
 import '@/ai/flows/generate-hiit-workout.ts';
+import '@/ai/flows/suggest-hiit-interval.ts';
