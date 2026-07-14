@@ -6,9 +6,11 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { ArrowLeft, Bell, CheckCircle2, Flame, Info, SkipForward } from 'lucide-react';
+import { ArrowLeft, Bell, Flame, Info, SkipForward } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ExerciseExplanationDialog } from './ExerciseExplanationDialog';
+import { ProgressRing } from './ProgressRing';
+import { CelebrationCheck } from './CelebrationCheck';
 
 type Segment = {
   kind: 'work' | 'rest' | 'roundRest';
@@ -244,7 +246,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
   if (status === 'finished') {
     return (
       <div className="p-4 md:p-6 flex flex-col items-center justify-center gap-6 text-center min-h-[60vh]">
-        <CheckCircle2 className="h-16 w-16 text-primary" />
+        <CelebrationCheck size={96} />
         <h1 className="text-3xl font-bold tracking-tighter">Session Complete!</h1>
         <p className="text-muted-foreground">
           "{workout.name}" has been logged to your cardio history.
@@ -335,9 +337,11 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
             Round {currentSegment.roundNumber} of {workout.rounds} · {segmentKindLabel(currentSegment.kind)}
           </p>
           <p className="text-xl font-semibold text-center">{currentSegment.label}</p>
-          <span className="font-mono text-8xl font-bold text-accent tabular-nums">
-            {formatTime(remainingSeconds)}
-          </span>
+          <ProgressRing value={remainingSeconds} max={currentSegment.seconds} size={280} strokeWidth={14}>
+            <span className="font-mono text-7xl font-bold text-accent tabular-nums">
+              {formatTime(remainingSeconds)}
+            </span>
+          </ProgressRing>
           {nextSegment && (
             <p className="text-muted-foreground text-sm">
               Up next: {nextSegment.label} ({segmentKindLabel(nextSegment.kind)})

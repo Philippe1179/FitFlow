@@ -55,6 +55,8 @@ import {
   DialogClose,
 } from './ui/dialog';
 import { Skeleton } from './ui/skeleton';
+import { ProgressRing } from './ProgressRing';
+import { CelebrationCheck } from './CelebrationCheck';
 
 type ExerciseState = {
   [key: string]: {
@@ -78,6 +80,7 @@ export default function WorkoutDayView({ day }: { day: string }) {
 
   // Timer state
   const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerTotalSeconds, setTimerTotalSeconds] = useState(60);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [activeTimerKey, setActiveTimerKey] = useState<string | null>(null);
   const timerEndTimeRef = useRef<number | null>(null);
@@ -96,6 +99,9 @@ export default function WorkoutDayView({ day }: { day: string }) {
   );
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isExplanationLoading, startExplanationTransition] = useTransition();
+
+  // Completion celebration state
+  const [isCelebrating, setIsCelebrating] = useState(false);
 
   // Suggestion Dialog state
   const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
@@ -401,6 +407,7 @@ export default function WorkoutDayView({ day }: { day: string }) {
     const endTime = Date.now() + duration * 1000;
     timerEndTimeRef.current = endTime;
     setTimerSeconds(duration);
+    setTimerTotalSeconds(duration);
     setIsTimerRunning(true);
     setActiveTimerKey(`${exName}-${setIndex}`);
   };
@@ -544,15 +551,12 @@ export default function WorkoutDayView({ day }: { day: string }) {
     };
 
     addCompletedWorkout(completedWorkout);
-    toast({
-      title: 'Workout Complete!',
-      description: `Great job, ${userProfile?.name}! Your workout has been logged.`,
-    });
 
     localStorage.removeItem(`workout-progress-${activePlan.id}-${dayPlan.day}`);
     localStorage.removeItem(`workout-rest-timers-${activePlan.id}-${dayPlan.day}`);
 
-    router.push('/');
+    setIsCelebrating(true);
+    setTimeout(() => router.push('/'), 1400);
   };
 
   const handleGetExplanation = (exerciseName: string) => {
@@ -1052,7 +1056,17 @@ export default function WorkoutDayView({ day }: { day: string }) {
         <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6 p-8">
           <p className="text-muted-foreground text-sm uppercase tracking-widest">Resting after</p>
           <p className="text-xl font-semibold text-center">{stickyTimerLabel}</p>
-          <span className="font-mono text-8xl font-bold text-primary tabular-nums">{formatTime(timerSeconds)}</span>
+          <ProgressRing
+            value={timerSeconds}
+            max={timerTotalSeconds}
+            size={280}
+            strokeWidth={14}
+            progressClassName="stroke-primary"
+          >
+            <span className="font-mono text-7xl font-bold text-primary tabular-nums">
+              {formatTime(timerSeconds)}
+            </span>
+          </ProgressRing>
           {timerEndTimeRef.current && (
             <p className="text-muted-foreground text-sm">
               ends at {new Date(timerEndTimeRef.current).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
@@ -1061,6 +1075,18 @@ export default function WorkoutDayView({ day }: { day: string }) {
           <Button variant="outline" size="lg" className="mt-4 text-lg px-10" onClick={stopTimer}>
             Skip Rest
           </Button>
+        </div>,
+        document.body
+      )}
+
+      {/* Fullscreen completion celebration — briefly shown before returning home */}
+      {isCelebrating && createPortal(
+        <div className="fixed inset-0 z-[110] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center gap-4 p-8">
+          <CelebrationCheck size={96} iconClassName="text-primary" glowClassName="bg-primary" />
+          <h2 className="text-3xl font-bold tracking-tighter">Workout Complete!</h2>
+          <p className="text-muted-foreground text-center">
+            Great job, {userProfile?.name}! Your workout has been logged.
+          </p>
         </div>,
         document.body
       )}

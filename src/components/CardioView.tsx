@@ -1,6 +1,7 @@
 'use client';
 
-import { useContext, useMemo, useState, useTransition } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -23,6 +24,7 @@ import {
 import { NumberPickerDialog } from './NumberPickerDialog';
 import { AddHiitWorkoutDialog } from './AddHiitWorkoutDialog';
 import { ProgressRing } from './ProgressRing';
+import { CelebrationCheck } from './CelebrationCheck';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +72,18 @@ export default function CardioView() {
   );
 
   const goalMetToday = todaySteps >= dailyStepGoal || didHiitToday;
+
+  const [showGoalCelebration, setShowGoalCelebration] = useState(false);
+  const wasGoalMetRef = useRef(goalMetToday);
+  useEffect(() => {
+    if (goalMetToday && !wasGoalMetRef.current) {
+      setShowGoalCelebration(true);
+      const timeout = setTimeout(() => setShowGoalCelebration(false), 2200);
+      wasGoalMetRef.current = true;
+      return () => clearTimeout(timeout);
+    }
+    wasGoalMetRef.current = goalMetToday;
+  }, [goalMetToday]);
 
   const sortedHistory = useMemo(() => {
     return [...cardioLogEntries].sort(
@@ -367,6 +381,17 @@ export default function CardioView() {
         initialWorkout={dialogWorkout}
         userProfile={userProfile}
       />
+
+      {showGoalCelebration && createPortal(
+        <div
+          className="fixed inset-0 z-[110] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center gap-4 p-8 pointer-events-none"
+        >
+          <CelebrationCheck size={96} />
+          <h2 className="text-3xl font-bold tracking-tighter">Daily Goal Met!</h2>
+          <p className="text-muted-foreground text-center">Nice work hitting your cardio goal today.</p>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
