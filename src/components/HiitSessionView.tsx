@@ -6,8 +6,9 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { ArrowLeft, Bell, CheckCircle2, Flame, SkipForward } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCircle2, Flame, Info, SkipForward } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { ExerciseExplanationDialog } from './ExerciseExplanationDialog';
 
 type Segment = {
   kind: 'work' | 'rest';
@@ -46,6 +47,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
   const [status, setStatus] = useState<'ready' | 'running' | 'finished'>('ready');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [explainingExercise, setExplainingExercise] = useState<string | null>(null);
   const sessionStartRef = useRef<number | null>(null);
   const hasLoggedRef = useRef(false);
 
@@ -271,8 +273,20 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
           </CardHeader>
           <CardContent className="space-y-2">
             {workout.intervals.map((interval, i) => (
-              <div key={i} className="flex justify-between rounded-md p-2 bg-muted/50 text-sm">
-                <span className="font-medium">{interval.name}</span>
+              <div key={i} className="flex justify-between items-center rounded-md p-2 bg-muted/50 text-sm">
+                <div className="flex items-center gap-1">
+                  <span className="font-medium">{interval.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setExplainingExercise(interval.name)}
+                    title="What is this exercise?"
+                  >
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="sr-only">Explain {interval.name}</span>
+                  </Button>
+                </div>
                 <span className="text-muted-foreground">
                   {interval.workSeconds}s work / {interval.restSeconds}s rest
                 </span>
@@ -284,6 +298,11 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
         <Button size="lg" className="w-full" onClick={startSession}>
           Start Session
         </Button>
+
+        <ExerciseExplanationDialog
+          exerciseName={explainingExercise}
+          onOpenChange={(open) => !open && setExplainingExercise(null)}
+        />
       </div>
     );
   }

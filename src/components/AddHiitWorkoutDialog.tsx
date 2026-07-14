@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Loader2, Info } from 'lucide-react';
 import type { HiitWorkout, HiitInterval, UserProfile } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { suggestHiitIntervalAction } from '@/app/actions';
+import { ExerciseExplanationDialog } from './ExerciseExplanationDialog';
 
 interface AddHiitWorkoutDialogProps {
   open: boolean;
@@ -45,6 +46,7 @@ export function AddHiitWorkoutDialog({
   const [intervals, setIntervals] = useState<HiitInterval[]>([emptyInterval()]);
   const [rerollPreferences, setRerollPreferences] = useState('');
   const [rerollingIndex, setRerollingIndex] = useState<number | null>(null);
+  const [explainingExercise, setExplainingExercise] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -147,138 +149,155 @@ export function AddHiitWorkoutDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditingSaved
-              ? 'Edit HIIT Workout'
-              : isReviewMode
-              ? 'Review AI-Generated Workout'
-              : 'Create HIIT Workout'}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditingSaved
-              ? 'Update this workout — changes apply when you save.'
-              : isReviewMode
-              ? 'Edit anything before saving — nothing is saved yet.'
-              : 'Build a work/rest circuit to repeat for a set number of rounds.'}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="hiit-name" className="text-right">
-              Name
-            </Label>
-            <Input
-              id="hiit-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="col-span-3"
-              placeholder="e.g. Rainy Day Cardio Blast"
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="hiit-rounds" className="text-right">
-              Rounds
-            </Label>
-            <Input
-              id="hiit-rounds"
-              type="number"
-              value={rounds}
-              onChange={(e) => setRounds(e.target.value)}
-              className="col-span-3"
-            />
-          </div>
-
-          {userProfile && (
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label htmlFor="hiit-reroll-prefs" className="text-right pt-2">
-                AI Preferences
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditingSaved
+                ? 'Edit HIIT Workout'
+                : isReviewMode
+                ? 'Review AI-Generated Workout'
+                : 'Create HIIT Workout'}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditingSaved
+                ? 'Update this workout — changes apply when you save.'
+                : isReviewMode
+                ? 'Edit anything before saving — nothing is saved yet.'
+                : 'Build a work/rest circuit to repeat for a set number of rounds.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="hiit-name" className="text-right">
+                Name
               </Label>
-              <Textarea
-                id="hiit-reroll-prefs"
-                value={rerollPreferences}
-                onChange={(e) => setRerollPreferences(e.target.value)}
-                className="col-span-3 min-h-[60px]"
-                placeholder='e.g. "I have a jump rope", "no exercises on the ground"'
+              <Input
+                id="hiit-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="col-span-3"
+                placeholder="e.g. Rainy Day Cardio Blast"
               />
             </div>
-          )}
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>Intervals (one circuit lap)</Label>
-              <Button variant="outline" size="sm" onClick={addInterval}>
-                <Plus className="mr-1 h-4 w-4" /> Add Interval
-              </Button>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="hiit-rounds" className="text-right">
+                Rounds
+              </Label>
+              <Input
+                id="hiit-rounds"
+                type="number"
+                value={rounds}
+                onChange={(e) => setRounds(e.target.value)}
+                className="col-span-3"
+              />
             </div>
-            {intervals.map((interval, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-[1fr,auto,auto,auto,auto] items-center gap-2 rounded-md border p-2"
-              >
-                <Input
-                  value={interval.name}
-                  onChange={(e) => updateInterval(index, 'name', e.target.value)}
-                  placeholder="Exercise name"
+
+            {userProfile && (
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="hiit-reroll-prefs" className="text-right pt-2">
+                  AI Preferences
+                </Label>
+                <Textarea
+                  id="hiit-reroll-prefs"
+                  value={rerollPreferences}
+                  onChange={(e) => setRerollPreferences(e.target.value)}
+                  className="col-span-3 min-h-[60px]"
+                  placeholder='e.g. "I have a jump rope", "no exercises on the ground"'
                 />
-                <Input
-                  type="number"
-                  value={interval.workSeconds}
-                  onChange={(e) => updateInterval(index, 'workSeconds', e.target.value)}
-                  className="w-16"
-                  title="Work seconds"
-                />
-                <Input
-                  type="number"
-                  value={interval.restSeconds}
-                  onChange={(e) => updateInterval(index, 'restSeconds', e.target.value)}
-                  className="w-16"
-                  title="Rest seconds"
-                />
-                {userProfile && (
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Intervals (one circuit lap)</Label>
+                <Button variant="outline" size="sm" onClick={addInterval}>
+                  <Plus className="mr-1 h-4 w-4" /> Add Interval
+                </Button>
+              </div>
+              {intervals.map((interval, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-[1fr,auto,auto,auto,auto,auto] items-center gap-2 rounded-md border p-2"
+                >
+                  <Input
+                    value={interval.name}
+                    onChange={(e) => updateInterval(index, 'name', e.target.value)}
+                    placeholder="Exercise name"
+                  />
+                  <Input
+                    type="number"
+                    value={interval.workSeconds}
+                    onChange={(e) => updateInterval(index, 'workSeconds', e.target.value)}
+                    className="w-16"
+                    title="Work seconds"
+                  />
+                  <Input
+                    type="number"
+                    value={interval.restSeconds}
+                    onChange={(e) => updateInterval(index, 'restSeconds', e.target.value)}
+                    className="w-16"
+                    title="Rest seconds"
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-9 w-9 shrink-0"
-                    onClick={() => handleReroll(index)}
-                    disabled={rerollingIndex !== null || !interval.name.trim()}
-                    title="Reroll this exercise with AI"
+                    onClick={() => setExplainingExercise(interval.name)}
+                    disabled={!interval.name.trim()}
+                    title="What is this exercise?"
                   >
-                    {rerollingIndex === index ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className="sr-only">Reroll {interval.name}</span>
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <span className="sr-only">Explain {interval.name}</span>
                   </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  onClick={() => removeInterval(index)}
-                  disabled={intervals.length === 1}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                  <span className="sr-only">Remove {interval.name || 'interval'}</span>
-                </Button>
-              </div>
-            ))}
-            <p className="text-xs text-muted-foreground">
-              Columns: exercise name, work (seconds), rest (seconds).
-              {userProfile && ' Use the reroll icon to get an AI-suggested swap for one exercise.'}
-            </p>
+                  {userProfile && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => handleReroll(index)}
+                      disabled={rerollingIndex !== null || !interval.name.trim()}
+                      title="Reroll this exercise with AI"
+                    >
+                      {rerollingIndex === index ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <span className="sr-only">Reroll {interval.name}</span>
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => removeInterval(index)}
+                    disabled={intervals.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <span className="sr-only">Remove {interval.name || 'interval'}</span>
+                  </Button>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Columns: exercise name, work (seconds), rest (seconds).
+                {userProfile && ' Use the reroll icon to get an AI-suggested swap for one exercise.'}
+              </p>
+            </div>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>{isEditingSaved ? 'Save Changes' : 'Save HIIT Workout'}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>{isEditingSaved ? 'Save Changes' : 'Save HIIT Workout'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ExerciseExplanationDialog
+        exerciseName={explainingExercise}
+        onOpenChange={(open) => !open && setExplainingExercise(null)}
+      />
+    </>
   );
 }
