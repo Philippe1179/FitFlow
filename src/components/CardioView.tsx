@@ -22,6 +22,17 @@ import {
 } from 'lucide-react';
 import { NumberPickerDialog } from './NumberPickerDialog';
 import { AddHiitWorkoutDialog } from './AddHiitWorkoutDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from './ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { createHiitWorkoutAction } from '@/app/actions';
 import type { HiitWorkout } from '@/lib/types';
@@ -260,14 +271,31 @@ export default function CardioView() {
                     <Pencil className="h-4 w-4 text-muted-foreground" />
                     <span className="sr-only">Edit {workout.name}</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => workout.id && deleteHiitWorkout(workout.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                    <span className="sr-only">Delete {workout.name}</span>
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <span className="sr-only">Delete {workout.name}</span>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete "{workout.name}"?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete this HIIT workout. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => workout.id && deleteHiitWorkout(workout.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Yes, delete it
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             ))
