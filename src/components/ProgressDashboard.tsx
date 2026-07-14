@@ -2,11 +2,11 @@
 import { useContext, useMemo, useState, useTransition } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Bar, BarChart, Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+import { Bar, BarChart, Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts';
 import { differenceInCalendarDays, parseISO, startOfWeek, format } from 'date-fns';
 import { calculateStreak } from '@/lib/utils';
 import { Button, buttonVariants } from './ui/button';
-import { Wand2, Award, Repeat, Zap, CalendarDays, Plus, Trash2, History, Scale } from 'lucide-react';
+import { Wand2, Award, Repeat, Zap, CalendarDays, Plus, Trash2, History, Scale, Footprints, Flame } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { adjustWorkoutPlanAction } from '@/app/actions';
 import {
@@ -51,6 +51,7 @@ export default function ProgressDashboard() {
     bodyWeightEntries,
     addBodyWeightEntry,
     deleteBodyWeightEntry,
+    cardioLogEntries,
   } = useContext(AppContext);
   const { toast } = useToast();
   const [isAdjusting, startAdjustTransition] = useTransition();
@@ -67,11 +68,15 @@ export default function ProgressDashboard() {
     );
   }, [completedWorkouts]);
 
+  const dailyStepGoal = userProfile?.dailyStepGoal || 10000;
+
   const stats = useMemo(() => {
     const totalWorkouts = completedWorkouts.length;
-    const streak = activePlan ? calculateStreak(completedWorkouts, activePlan) : 0;
+    const streak = activePlan
+      ? calculateStreak(completedWorkouts, activePlan, cardioLogEntries, dailyStepGoal)
+      : 0;
     return { totalWorkouts, streak };
-  }, [completedWorkouts, activePlan]);
+  }, [completedWorkouts, activePlan, cardioLogEntries, dailyStepGoal]);
 
   const chartData = useMemo(() => {
     const weekData: { [key: string]: { name: string; total: number } } = {
@@ -93,6 +98,29 @@ export default function ProgressDashboard() {
     });
     return Object.values(weekData);
   }, [completedWorkouts]);
+
+  const cardioChartData = useMemo(() => {
+    const weekData: { [key: string]: { name: string; steps: number; hiit: boolean } } = {
+      Sun: { name: 'Sun', steps: 0, hiit: false },
+      Mon: { name: 'Mon', steps: 0, hiit: false },
+      Tue: { name: 'Tue', steps: 0, hiit: false },
+      Wed: { name: 'Wed', steps: 0, hiit: false },
+      Thu: { name: 'Thu', steps: 0, hiit: false },
+      Fri: { name: 'Fri', steps: 0, hiit: false },
+      Sat: { name: 'Sat', steps: 0, hiit: false },
+    };
+    const currentWeekStart = startOfWeek(new Date());
+    cardioLogEntries.forEach((e) => {
+      const date = parseISO(e.date);
+      if (differenceInCalendarDays(currentWeekStart, date) <= 0) {
+        const day = date.toLocaleDateString('en-US', { weekday: 'short' });
+        if (!weekData[day]) return;
+        if (e.type === 'steps') weekData[day].steps += e.steps || 0;
+        if (e.type === 'hiit') weekData[day].hiit = true;
+      }
+    });
+    return Object.values(weekData);
+  }, [cardioLogEntries]);
 
   const handleAdjustPlan = () => {
     if (!userProfile || !activePlan) {
@@ -195,12 +223,12 @@ export default function ProgressDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Workout Streak</CardTitle>
+            <CardTitle className="text-sm font-medium">Activity Streak</CardTitle>
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.streak}</div>
-            <p className="text-xs text-muted-foreground">consecutive days</p>
+            <p className="text-xs text-muted-foreground">consecutive active days</p>
           </CardContent>
         </Card>
       </div>
@@ -301,6 +329,58 @@ export default function ProgressDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Footprints className="mr-2" />
+            Cardio Activity
+          </CardTitle>
+          <CardDescription>Steps this week, with your daily goal as a dashed line. The flame marks days you logged a HIIT session.</CardDescription>
+        </CardHeader>
+        <CardContent className="pl-2">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={cardioChartData}>
+              <XAxis
+                dataKey="name"
+                stroke="#888888"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                stroke="#888888"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `${value}`}
+                allowDecimals={false}
+              />
+              <Tooltip formatter={(v) => [`${v} steps`, 'Steps']} />
+              <ReferenceLine
+                y={dailyStepGoal}
+                stroke="hsl(var(--primary))"
+                strokeDasharray="4 4"
+                strokeOpacity={0.6}
+              />
+              <Bar dataKey="steps" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="grid grid-cols-7 gap-1 mt-2 px-2">
+            {cardioChartData.map((day) => (
+              <div key={day.name} className="flex flex-col items-center gap-1">
+                <Flame
+                  className={cn(
+                    'h-4 w-4',
+                    day.hiit ? 'text-primary' : 'text-muted-foreground/20'
+                  )}
+                />
+                <span className="text-xs text-muted-foreground">{day.name}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

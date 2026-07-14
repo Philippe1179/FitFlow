@@ -26,11 +26,39 @@ interface AddHiitWorkoutDialogProps {
   userProfile: UserProfile | null;
 }
 
-const emptyInterval = (): HiitInterval => ({
-  name: '',
+const DEFAULTS_STORAGE_KEY = 'hiit-last-used-defaults';
+
+type HiitDefaults = {
+  workSeconds: number;
+  restSeconds: number;
+  restBetweenRoundsSeconds: number;
+};
+
+const FALLBACK_DEFAULTS: HiitDefaults = {
   workSeconds: 30,
   restSeconds: 15,
-});
+  restBetweenRoundsSeconds: 30,
+};
+
+const getStoredDefaults = (): HiitDefaults => {
+  if (typeof window === 'undefined') return FALLBACK_DEFAULTS;
+  try {
+    const raw = localStorage.getItem(DEFAULTS_STORAGE_KEY);
+    if (raw) return { ...FALLBACK_DEFAULTS, ...JSON.parse(raw) };
+  } catch {}
+  return FALLBACK_DEFAULTS;
+};
+
+const setStoredDefaults = (defaults: HiitDefaults) => {
+  try {
+    localStorage.setItem(DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
+  } catch {}
+};
+
+const emptyInterval = (): HiitInterval => {
+  const defaults = getStoredDefaults();
+  return { name: '', workSeconds: defaults.workSeconds, restSeconds: defaults.restSeconds };
+};
 
 export function AddHiitWorkoutDialog({
   open,
@@ -61,7 +89,7 @@ export function AddHiitWorkoutDialog({
     } else if (open && !initialWorkout) {
       setName('');
       setRounds('3');
-      setRestBetweenRounds('30');
+      setRestBetweenRounds(String(getStoredDefaults().restBetweenRoundsSeconds));
       setIntervals([emptyInterval()]);
     }
     if (open) {
@@ -141,13 +169,21 @@ export function AddHiitWorkoutDialog({
     }
 
     const restBetweenRoundsNum = parseInt(restBetweenRounds, 10);
+    const restBetweenRoundsSeconds = isNaN(restBetweenRoundsNum) ? 0 : Math.max(0, restBetweenRoundsNum);
+
+    const lastInterval = validIntervals[validIntervals.length - 1];
+    setStoredDefaults({
+      workSeconds: lastInterval.workSeconds,
+      restSeconds: lastInterval.restSeconds,
+      restBetweenRoundsSeconds,
+    });
 
     onSave({
       ...(initialWorkout?.id ? { id: initialWorkout.id } : {}),
       name,
       rounds: roundsNum,
       intervals: validIntervals,
-      restBetweenRoundsSeconds: isNaN(restBetweenRoundsNum) ? 0 : Math.max(0, restBetweenRoundsNum),
+      restBetweenRoundsSeconds,
       source: initialWorkout?.source || 'manual',
     });
 

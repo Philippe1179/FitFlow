@@ -1,6 +1,6 @@
 'use client';
 
-import { useContext } from 'react';
+import { useContext, useState, useTransition } from 'react';
 import { AppContext } from '@/contexts/AppContext';
 import {
   Card,
@@ -11,18 +11,30 @@ import {
 } from './ui/card';
 import { Button } from './ui/button';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, Flame, Footprints, Moon, Repeat, Zap } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Flame, Footprints, Moon, Plus, Repeat, Scale, Zap } from 'lucide-react';
 import { getTodayDayName, calculateStreak, getTodayCardioStats } from '@/lib/utils';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images.json';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
-  const { userProfile, activePlan, completedWorkouts, cardioLogEntries } = useContext(AppContext);
+  const {
+    userProfile,
+    activePlan,
+    completedWorkouts,
+    cardioLogEntries,
+    bodyWeightEntries,
+    addBodyWeightEntry,
+  } = useContext(AppContext);
+  const { toast } = useToast();
   const today = getTodayDayName();
   const dailyStepGoal = userProfile?.dailyStepGoal || 10000;
   const { steps: todaySteps, didHiit: didHiitToday } = getTodayCardioStats(cardioLogEntries);
   const cardioGoalMet = todaySteps >= dailyStepGoal || didHiitToday;
+
+  const [weightInput, setWeightInput] = useState('');
+  const [isLoggingWeight, startWeightTransition] = useTransition();
 
   const planForToday = activePlan?.weeklyWorkoutPlan.find(
     (p) => p.day.toLowerCase() === today.toLowerCase()
@@ -30,13 +42,36 @@ export default function Dashboard() {
   const isRestDay = !planForToday || planForToday.exercises.length === 0;
 
   const totalWorkouts = completedWorkouts.length;
-  const streak = activePlan ? calculateStreak(completedWorkouts, activePlan) : 0;
+  const streak = activePlan
+    ? calculateStreak(completedWorkouts, activePlan, cardioLogEntries, dailyStepGoal)
+    : 0;
 
   const isTodayCompleted = completedWorkouts.some(
     (w) =>
       differenceInCalendarDays(new Date(), parseISO(w.date)) === 0 &&
       w.day.toLowerCase() === today.toLowerCase()
   );
+
+  const latestWeightEntry = [...bodyWeightEntries].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  )[0];
+  const displayUnit = userProfile?.displayWeightUnit || 'kg';
+  const latestWeightDisplay = latestWeightEntry
+    ? displayUnit === 'lbs'
+      ? (latestWeightEntry.weight * 2.20462).toFixed(1)
+      : latestWeightEntry.weight.toFixed(1)
+    : null;
+
+  const handleLogWeight = () => {
+    const val = parseFloat(weightInput);
+    if (isNaN(val) || val <= 0) return;
+    startWeightTransition(async () => {
+      const kg = displayUnit === 'lbs' ? val * 0.453592 : val;
+      await addBodyWeightEntry(kg);
+      setWeightInput('');
+      toast({ title: 'Weight logged!' });
+    });
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -163,12 +198,42 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Workout Streak</CardTitle>
+            <CardTitle className="text-sm font-medium">Activity Streak</CardTitle>
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{streak}</div>
-            <p className="text-xs text-muted-foreground">consecutive days</p>
+            <p className="text-xs text-muted-foreground">consecutive active days</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Quick Log Weight</CardTitle>
+            <Scale className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                placeholder={displayUnit}
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                className="w-full h-8 text-sm px-2 rounded-md border border-input bg-background"
+              />
+              <Button
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                disabled={isLoggingWeight || !weightInput}
+                onClick={handleLogWeight}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {latestWeightDisplay ? `Last: ${latestWeightDisplay} ${displayUnit}` : 'No entries yet'}
+            </p>
           </CardContent>
         </Card>
       </div>

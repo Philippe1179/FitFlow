@@ -24,45 +24,73 @@ export function getTodayCardioStats(entries: CardioLogEntry[]) {
   return { steps, didHiit };
 }
 
-export function calculateStreak(completedWorkouts: CompletedWorkout[], activePlan: WorkoutPlan): number {
-  if (completedWorkouts.length === 0) return 0;
+// A day counts toward the streak if a strength workout was completed OR the
+// day's cardio goal was met (steps >= goal, or a HIIT session was logged).
+export function calculateStreak(
+  completedWorkouts: CompletedWorkout[],
+  activePlan: WorkoutPlan,
+  cardioLogEntries: CardioLogEntry[] = [],
+  dailyStepGoal: number = 10000
+): number {
+  const activeDates = new Map<string, Date>();
+  completedWorkouts.forEach((w) => {
+    const date = parseISO(w.date);
+    activeDates.set(date.toDateString(), date);
+  });
 
-  const sorted = [...completedWorkouts].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  const stepsByDate = new Map<string, number>();
+  cardioLogEntries.forEach((e) => {
+    const date = parseISO(e.date);
+    const key = date.toDateString();
+    if (e.type === 'steps') {
+      stepsByDate.set(key, (stepsByDate.get(key) || 0) + (e.steps || 0));
+    } else if (e.type === 'hiit') {
+      activeDates.set(key, date);
+    }
+  });
+  stepsByDate.forEach((steps, key) => {
+    if (steps >= dailyStepGoal) {
+      activeDates.set(key, new Date(key));
+    }
+  });
+
+  if (activeDates.size === 0) return 0;
+
+  const isRestDay = (date: Date) => {
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+    const planForDay = activePlan.weeklyWorkoutPlan.find(
+      (p) => p.day.toLowerCase() === dayName.toLowerCase()
+    );
+    return !planForDay || planForDay.exercises.length === 0;
+  };
+
+  const allGapDaysAreRest = (laterDate: Date, earlierDate: Date): boolean => {
+    const diff = differenceInCalendarDays(laterDate, earlierDate);
+    for (let j = 1; j < diff; j++) {
+      if (!isRestDay(subDays(laterDate, j))) return false;
+    }
+    return true;
+  };
+
+  const sortedActiveDates = [...activeDates.values()].sort((a, b) => b.getTime() - a.getTime());
 
   const todayDate = new Date();
-  const lastWorkoutDate = parseISO(sorted[0].date);
-  const daysSinceLast = differenceInCalendarDays(todayDate, lastWorkoutDate);
-
-  let restDaysSinceLast = 0;
-  for (let i = 1; i < daysSinceLast; i++) {
-    const dateToCheck = subDays(todayDate, i);
-    const dayName = dateToCheck.toLocaleDateString('en-US', { weekday: 'long' });
-    const planForDay = activePlan.weeklyWorkoutPlan.find(p => p.day.toLowerCase() === dayName.toLowerCase());
-    if (!planForDay || planForDay.exercises.length === 0) restDaysSinceLast++;
-  }
-
-  if (daysSinceLast - restDaysSinceLast > 1) return 0;
+  const lastActiveDate = sortedActiveDates[0];
+  if (!allGapDaysAreRest(todayDate, lastActiveDate)) return 0;
 
   let streak = 1;
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const currentWorkoutDate = parseISO(sorted[i].date);
-    const prevWorkoutDate = parseISO(sorted[i + 1].date);
-    const dayDiff = differenceInCalendarDays(currentWorkoutDate, prevWorkoutDate);
+  for (let i = 0; i < sortedActiveDates.length - 1; i++) {
+    const current = sortedActiveDates[i];
+    const previous = sortedActiveDates[i + 1];
+    const dayDiff = differenceInCalendarDays(current, previous);
 
     if (dayDiff <= 0) continue;
 
-    let restDaysBetween = 0;
-    for (let j = 1; j < dayDiff; j++) {
-      const dateToCheck = subDays(currentWorkoutDate, j);
-      const dayName = dateToCheck.toLocaleDateString('en-US', { weekday: 'long' });
-      const planForDay = activePlan.weeklyWorkoutPlan.find(p => p.day.toLowerCase() === dayName.toLowerCase());
-      if (!planForDay || planForDay.exercises.length === 0) restDaysBetween++;
+    if (allGapDaysAreRest(current, previous)) {
+      streak++;
+    } else {
+      break;
     }
-
-    if (dayDiff - restDaysBetween === 1) streak++;
-    else break;
   }
 
   return streak;
