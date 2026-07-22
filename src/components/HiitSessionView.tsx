@@ -67,6 +67,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const backgroundAudioRef = useRef<{ silentSource: AudioBufferSourceNode; beepGain: GainNode } | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   useEffect(() => {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -131,6 +132,20 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
     backgroundAudioRef.current = null;
   }, []);
 
+  const requestWakeLock = useCallback(async () => {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen');
+    } catch {
+      // Lock can be denied (e.g. low battery, no user gesture) — timer still runs fine without it.
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    wakeLockRef.current?.release().catch(() => {});
+    wakeLockRef.current = null;
+  }, []);
+
   const finishSession = useCallback(() => {
     if (hasLoggedRef.current || !workout) return;
     hasLoggedRef.current = true;
@@ -189,6 +204,17 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
     }
   }, [remainingSeconds, currentIndex, status, playSound]);
 
+  // The Wake Lock is held only while visible (the browser auto-releases it when the
+  // tab/screen is hidden), so re-request it whenever the session resumes visibility.
+  useEffect(() => {
+    if (status !== 'running') {
+      releaseWakeLock();
+      return;
+    }
+    requestWakeLock();
+    return () => releaseWakeLock();
+  }, [status, requestWakeLock, releaseWakeLock]);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       const sw = swRegistrationRef.current?.active;
@@ -212,11 +238,12 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
       } else {
         cancelBackgroundBeep();
         if (sw) sw.postMessage({ type: 'CANCEL_NOTIFICATION' });
+        requestWakeLock();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [status, currentIndex, segments, cumulativeMs, scheduleBackgroundBeep, cancelBackgroundBeep]);
+  }, [status, currentIndex, segments, cumulativeMs, scheduleBackgroundBeep, cancelBackgroundBeep, requestWakeLock]);
 
   const skipSegment = () => {
     if (!sessionStartRef.current) return;
