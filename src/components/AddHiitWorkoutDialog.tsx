@@ -276,65 +276,80 @@ export function AddHiitWorkoutDialog({
               {intervals.map((interval, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-[1fr,auto,auto,auto,auto,auto] items-center gap-2 rounded-md border p-2"
+                  className="flex flex-col gap-2 rounded-md border p-2 sm:grid sm:grid-cols-[1fr,auto,auto,auto,auto,auto] sm:items-center"
                 >
                   <Input
                     value={interval.name}
                     onChange={(e) => updateInterval(index, 'name', e.target.value)}
                     placeholder="Exercise name"
+                    className="min-w-0"
                   />
-                  <Input
-                    type="number"
-                    value={interval.workSeconds}
-                    onChange={(e) => updateInterval(index, 'workSeconds', e.target.value)}
-                    className="w-16"
-                    title="Work seconds"
-                  />
-                  <Input
-                    type="number"
-                    value={interval.restSeconds}
-                    onChange={(e) => updateInterval(index, 'restSeconds', e.target.value)}
-                    className="w-16"
-                    title="Rest seconds"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => setExplainingExercise(interval.name)}
-                    disabled={!interval.name.trim()}
-                    title="What is this exercise?"
-                  >
-                    <Info className="h-4 w-4 text-muted-foreground" />
-                    <span className="sr-only">Explain {interval.name}</span>
-                  </Button>
-                  {userProfile && (
+                  <div className="flex items-center gap-2 sm:contents">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground sm:hidden">
+                        Work (s)
+                      </span>
+                      <Input
+                        type="number"
+                        value={interval.workSeconds}
+                        onChange={(e) => updateInterval(index, 'workSeconds', e.target.value)}
+                        className="w-16"
+                        title="Work seconds"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground sm:hidden">
+                        Rest (s)
+                      </span>
+                      <Input
+                        type="number"
+                        value={interval.restSeconds}
+                        onChange={(e) => updateInterval(index, 'restSeconds', e.target.value)}
+                        className="w-16"
+                        title="Rest seconds"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 justify-end sm:contents">
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 shrink-0"
-                      onClick={() => handleReroll(index)}
-                      disabled={rerollingIndex !== null || !interval.name.trim()}
-                      title="Reroll this exercise with AI"
+                      onClick={() => setExplainingExercise(interval.name)}
+                      disabled={!interval.name.trim()}
+                      title="What is this exercise?"
                     >
-                      {rerollingIndex === index ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span className="sr-only">Reroll {interval.name}</span>
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                      <span className="sr-only">Explain {interval.name}</span>
                     </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => removeInterval(index)}
-                    disabled={intervals.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                    <span className="sr-only">Remove {interval.name || 'interval'}</span>
-                  </Button>
+                    {userProfile && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        onClick={() => handleReroll(index)}
+                        disabled={rerollingIndex !== null || !interval.name.trim()}
+                        title="Reroll this exercise with AI"
+                      >
+                        {rerollingIndex === index ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className="sr-only">Reroll {interval.name}</span>
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => removeInterval(index)}
+                      disabled={intervals.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <span className="sr-only">Remove {interval.name || 'interval'}</span>
+                    </Button>
+                  </div>
                 </div>
               ))}
               <p className="text-xs text-muted-foreground">

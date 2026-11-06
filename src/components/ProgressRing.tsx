@@ -11,6 +11,13 @@ interface ProgressRingProps {
   className?: string;
   trackClassName?: string;
   progressClassName?: string;
+  /**
+   * Which way the arc is drawn from the 12 o'clock start. 'cw' grows the arc
+   * clockwise as `value` rises (the right choice for a filling progress ring);
+   * 'ccw' anchors the arc's end at 12 o'clock instead, so a countdown ring
+   * empties *clockwise* as `value` falls.
+   */
+  drawDirection?: 'cw' | 'ccw';
   children?: ReactNode;
 }
 
@@ -22,6 +29,7 @@ export function ProgressRing({
   className,
   trackClassName,
   progressClassName,
+  drawDirection = 'cw',
   children,
 }: ProgressRingProps) {
   const radius = (size - strokeWidth) / 2;
@@ -50,7 +58,7 @@ export function ProgressRing({
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={circumference}
-          strokeDashoffset={offset}
+          strokeDashoffset={drawDirection === 'ccw' ? -offset : offset}
           strokeLinecap="round"
           className={cn('stroke-accent transition-all duration-700 ease-out', progressClassName)}
         />

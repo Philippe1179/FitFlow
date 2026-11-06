@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ExerciseExplanationDialog } from './ExerciseExplanationDialog';
 import { ProgressRing } from './ProgressRing';
 import { CelebrationCheck } from './CelebrationCheck';
+import { COUNTDOWN_VOICE_FROM, useCountdownVoice } from '@/hooks/use-countdown-voice';
 
 type Segment = {
   kind: 'work' | 'rest' | 'roundRest';
@@ -21,6 +22,23 @@ type Segment = {
 
 const segmentKindLabel = (kind: Segment['kind']) =>
   kind === 'work' ? 'Work' : kind === 'roundRest' ? 'Round Break' : 'Rest';
+
+/** Schedules a beep on the audio clock and returns the node so it can be cancelled. */
+const scheduleBeep = (
+  ctx: AudioContext,
+  { freq, duration, gain, at }: { freq: number; duration: number; gain: number; at: number }
+) => {
+  const oscillator = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+  oscillator.connect(gainNode);
+  gainNode.connect(ctx.destination);
+  gainNode.gain.value = gain;
+  oscillator.frequency.value = freq;
+  oscillator.type = 'sine';
+  oscillator.start(at);
+  oscillator.stop(at + duration);
+  return oscillator;
+};
 
 export default function HiitSessionView({ workoutId }: { workoutId: string }) {
   const { hiitWorkouts, addCardioLogEntry } = useContext(AppContext);
@@ -66,7 +84,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const backgroundAudioRef = useRef<{ silentSource: AudioBufferSourceNode; beepGain: GainNode } | null>(null);
+  const backgroundAudioRef = useRef<AudioScheduledSourceNode[] | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   useEffect(() => {
@@ -83,6 +101,8 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
     }
   }, []);
 
+  const { primeVoice, sayCount, scheduleCount } = useCountdownVoice(() => audioContextRef.current);
+
   const playSound = useCallback((freq: number, duration: number) => {
     const ctx = audioContextRef.current;
     if (!ctx) return;
@@ -98,11 +118,14 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
     oscillator.stop(ctx.currentTime + duration);
   }, []);
 
-  const scheduleBackgroundBeep = useCallback((remainingMs: number) => {
+  // Hidden tabs get their JS timers throttled, so the final countdown and the
+  // switch beep are pre-scheduled on the audio clock instead of fired per tick.
+  const scheduleBackgroundCues = useCallback((remainingMs: number) => {
     const ctx = audioContextRef.current;
     if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
 
+    // A looping silent buffer keeps the audio graph running while hidden.
     const silentBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const silentSource = ctx.createBufferSource();
     silentSource.buffer = silentBuffer;
@@ -110,25 +133,26 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
     silentSource.connect(ctx.destination);
     silentSource.start();
 
-    const beepTime = ctx.currentTime + remainingMs / 1000;
-    const osc = ctx.createOscillator();
-    const beepGain = ctx.createGain();
-    osc.connect(beepGain);
-    beepGain.connect(ctx.destination);
-    beepGain.gain.value = 0.8;
-    osc.frequency.value = 880;
-    osc.start(beepTime);
-    osc.stop(beepTime + 0.8);
+    const boundary = ctx.currentTime + remainingMs / 1000;
+    const nodes: AudioScheduledSourceNode[] = [silentSource];
 
-    backgroundAudioRef.current = { silentSource, beepGain };
-  }, []);
+    for (let n = COUNTDOWN_VOICE_FROM; n >= 1; n--) {
+      const at = boundary - n;
+      if (at <= ctx.currentTime) continue;
+      // Speech synthesis can't be scheduled ahead, so without voice clips the
+      // hidden-tab countdown falls back to beeps.
+      nodes.push(scheduleCount(n, at) ?? scheduleBeep(ctx, { freq: 440, duration: 0.15, gain: 0.5, at }));
+    }
+    nodes.push(scheduleBeep(ctx, { freq: 880, duration: 0.8, gain: 0.8, at: boundary }));
 
-  const cancelBackgroundBeep = useCallback(() => {
-    const ctx = audioContextRef.current;
-    if (!backgroundAudioRef.current || !ctx) return;
-    const { silentSource, beepGain } = backgroundAudioRef.current;
-    try { silentSource.stop(); } catch {}
-    beepGain.gain.setValueAtTime(0, ctx.currentTime);
+    backgroundAudioRef.current = nodes;
+  }, [scheduleCount]);
+
+  const cancelBackgroundCues = useCallback(() => {
+    if (!backgroundAudioRef.current) return;
+    backgroundAudioRef.current.forEach((node) => {
+      try { node.stop(); } catch {}
+    });
     backgroundAudioRef.current = null;
   }, []);
 
@@ -150,12 +174,12 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
     if (hasLoggedRef.current || !workout) return;
     hasLoggedRef.current = true;
     setStatus('finished');
-    cancelBackgroundBeep();
+    cancelBackgroundCues();
     const sw = swRegistrationRef.current?.active;
     if (sw) sw.postMessage({ type: 'CANCEL_NOTIFICATION' });
     addCardioLogEntry({ type: 'hiit', hiitWorkoutName: workout.name });
     toast({ title: 'HIIT Session Complete!', description: `Nice work on "${workout.name}".` });
-  }, [workout, addCardioLogEntry, toast, cancelBackgroundBeep]);
+  }, [workout, addCardioLogEntry, toast, cancelBackgroundCues]);
 
   const startSession = async () => {
     if (segments.length === 0) return;
@@ -163,6 +187,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
       const result = await Notification.requestPermission();
       setNotifPermission(result);
     }
+    primeVoice();
     sessionStartRef.current = Date.now();
     setCurrentIndex(0);
     setRemainingSeconds(segments[0].seconds);
@@ -190,19 +215,26 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
     return () => clearInterval(interval);
   }, [status, segments, cumulativeMs, totalDurationMs, finishSession]);
 
-  // Beep near the end of each segment and on segment transitions.
+  // Count the last few seconds of each segment out loud, then beep on the switch.
   const prevIndexRef = useRef(currentIndex);
+  const lastCountedRef = useRef<string | null>(null);
   useEffect(() => {
     if (status !== 'running') return;
+
     if (prevIndexRef.current !== currentIndex) {
       playSound(880, 0.4);
       prevIndexRef.current = currentIndex;
-    } else if (remainingSeconds <= 3 && remainingSeconds > 1) {
-      playSound(440, 0.15);
-    } else if (remainingSeconds === 1) {
-      playSound(659, 0.2);
     }
-  }, [remainingSeconds, currentIndex, status, playSound]);
+
+    if (remainingSeconds > 0 && remainingSeconds <= COUNTDOWN_VOICE_FROM) {
+      // Keyed by segment so a second seen on two ticks isn't counted twice.
+      const cue = currentIndex + ':' + remainingSeconds;
+      if (lastCountedRef.current !== cue) {
+        lastCountedRef.current = cue;
+        if (!sayCount(remainingSeconds)) playSound(440, 0.15);
+      }
+    }
+  }, [remainingSeconds, currentIndex, status, playSound, sayCount]);
 
   // The Wake Lock is held only while visible (the browser auto-releases it when the
   // tab/screen is hidden), so re-request it whenever the session resumes visibility.
@@ -224,7 +256,7 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
         const nextBoundaryAbs = sessionStartRef.current + cumulativeMs[currentIndex + 1];
         const remaining = nextBoundaryAbs - Date.now();
         if (remaining > 0) {
-          scheduleBackgroundBeep(remaining);
+          scheduleBackgroundCues(remaining);
           if (sw && Notification.permission === 'granted') {
             const nextSegment = segments[currentIndex + 1];
             sw.postMessage({
@@ -236,14 +268,14 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
           }
         }
       } else {
-        cancelBackgroundBeep();
+        cancelBackgroundCues();
         if (sw) sw.postMessage({ type: 'CANCEL_NOTIFICATION' });
         requestWakeLock();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [status, currentIndex, segments, cumulativeMs, scheduleBackgroundBeep, cancelBackgroundBeep, requestWakeLock]);
+  }, [status, currentIndex, segments, cumulativeMs, scheduleBackgroundCues, cancelBackgroundCues, requestWakeLock]);
 
   const skipSegment = () => {
     if (!sessionStartRef.current) return;
@@ -364,7 +396,13 @@ export default function HiitSessionView({ workoutId }: { workoutId: string }) {
             Round {currentSegment.roundNumber} of {workout.rounds} · {segmentKindLabel(currentSegment.kind)}
           </p>
           <p className="text-xl font-semibold text-center">{currentSegment.label}</p>
-          <ProgressRing value={remainingSeconds} max={currentSegment.seconds} size={280} strokeWidth={14}>
+          <ProgressRing
+            value={remainingSeconds}
+            max={currentSegment.seconds}
+            size={280}
+            strokeWidth={14}
+            drawDirection="ccw"
+          >
             <span className="font-mono text-7xl font-bold text-accent tabular-nums">
               {formatTime(remainingSeconds)}
             </span>
